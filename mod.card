@@ -1,0 +1,23 @@
+-- Sharing metadata, read by tooling and the manager detail pane only.
+return {
+  summary = "Party menu gains RELEARN (between STATS and SWITCH, field only) to relearn any level-up move the mon has reached the level for.",
+  author = "Shane McGovern",
+  contact = "https://github.com/ShaneMcGovernIE",
+  tags = { "gameplay", "quality-of-life", "party" },
+  differences = {
+    changed = {
+      "the field party-menu submenu gains a RELEARN option between STATS and SWITCH",
+      "RELEARN lists the mon's species movelist (level-1 moves plus learnset entries) at or below its current level, minus moves it already knows",
+      "picking a move with a free slot learns it immediately at full base PP",
+      "a full moveset opens a forget list; HM moves can't be forgotten",
+    },
+    added = {},
+    known = {
+      "battle never shows RELEARN -- the battle submenu stays SWITCH / STATS / CANCEL",
+      "RELEARN always shows out of battle; a mon with nothing left to relearn reads 'No moves to relearn.'",
+      "PP-ups on a relearned move start from the move's base PP",
+    },
+  },
+  credits = {},
+  compat = { engine = ">=0.0.0-0 <2.0.0", modApi = 2 },
+}
