@@ -106,6 +106,7 @@ function MoveRelearn.new(game, mon)
   self.list = def and buildRelearnable(game.data, def, mon) or {}
   self.index = 1
   self.scroll = 0
+  self.tick = 0
   -- nil, or { move, index } while choosing a slot to replace
   self.forgetting = nil
   return self
@@ -123,6 +124,7 @@ function MoveRelearn:finish(message)
 end
 
 function MoveRelearn:update(dt)
+  self.tick = (self.tick or 0) + (dt or 0)
   local input = self.game.input
   if self.forgetting then
     local n = #self.mon.moves + 1 -- moves + CANCEL
@@ -190,6 +192,57 @@ function MoveRelearn:update(dt)
   end
 end
 
+-- Box is 16 tiles at (4,5) (TextBoxBorder 4,7, MoveLearnMenu's geometry);
+-- names start at x=48, one glyph in from the box's left border.  The
+-- engine's own text convention pads 8px inside the box, so labels clip at
+-- the inner right edge: 152.  The GB font is a flat 8px/glyph, so a label
+-- wider than 13 glyphs ("LV  7 WING ATTACK" is 15) would run past the
+-- border and gets a scrolling ticker instead.
+local CLIP_X = 48
+local CLIP_W = 152 - CLIP_X -- 104px = 13 glyphs
+
+-- Ticker hold/scroll pacing: hold at each end so the player can read the
+-- whole name, scroll at 24px/s (about a glyph every 1/3s).
+local TICKER_HOLD = 1.2
+local TICKER_SPEED = 24
+
+-- Pure (mod.exports.tickerOffset for headless tests): horizontal offset
+-- for an overflowing label at time t (seconds).  Cycle: hold at 0, scroll
+-- out to -overflow, hold, scroll back to 0.  Labels that fit (overflow <=
+-- 0) are static.
+function MoveRelearn.tickerOffset(t, overflow)
+  if not (overflow and overflow > 0) then return 0 end
+  local scroll = overflow / TICKER_SPEED
+  local cycle = 2 * TICKER_HOLD + 2 * scroll
+  local p = t % cycle
+  if p < TICKER_HOLD then return 0 end
+  p = p - TICKER_HOLD
+  if p < scroll then return -p * TICKER_SPEED end
+  p = p - scroll
+  if p < TICKER_HOLD then return -overflow end
+  p = p - TICKER_HOLD
+  return -overflow + p * TICKER_SPEED
+end
+
+-- Draw one label, tickering when it overflows the box's text window.
+-- love.graphics.setScissor bounds the marquee to the row so the text
+-- never bleeds over the box border; the clip is cleared per row.
+local function drawRowLabel(game, label, row, tick)
+  local y = (5 + row) * 8
+  local w = Font.width(label)
+  if w <= CLIP_W then
+    Font.draw(label, CLIP_X, y)
+    return
+  end
+  if love and love.graphics and love.graphics.setScissor then
+    love.graphics.setScissor(CLIP_X, y, CLIP_W, 8)
+  end
+  Font.draw(label, CLIP_X + MoveRelearn.tickerOffset(tick or 0, w - CLIP_W), y)
+  if love and love.graphics and love.graphics.setScissor then
+    love.graphics.setScissor()
+  end
+end
+
 function MoveRelearn:draw()
   -- same box geometry as MoveLearnMenu's forget list (TextBoxBorder 4,7)
   Font.drawBox(4, 5, 16, 7)
@@ -211,8 +264,9 @@ function MoveRelearn:draw()
     local last = math.min(#self.list, self.scroll + ROWS)
     for i = self.scroll + 1, last do
       local e = self.list[i]
-      Font.draw(("%s %s"):format(("LV%3d"):format(e.level), e.name),
-                48, (5 + i - self.scroll) * 8)
+      drawRowLabel(self.game, ("%s %s"):format(("LV%3d"):format(e.level),
+                                               e.name), i - self.scroll,
+                   self.tick)
     end
     Font.drawCode(CURSOR, 40, (5 + self.index - self.scroll) * 8)
     Font.drawBox(0, 12, 20, 6)
@@ -226,6 +280,7 @@ return function(mod)
   mod.exports.buildRelearnable = buildRelearnable
   mod.exports.applyMove = applyMove
   mod.exports.injectSubmenu = injectSubmenu
+  mod.exports.tickerOffset = MoveRelearn.tickerOffset
   mod.exports.HM_MOVES = HM_MOVES
 
   mod.content.screens:register("MoveRelearn", { new = MoveRelearn.new })

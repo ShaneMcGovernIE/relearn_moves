@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] - 2026-08-03
+
+### Added
+
+- Move names that overflow the relearn list box now scroll as a ticker:
+  hold at the start, scroll to the end, hold, scroll back. The marquee is
+  clipped to the row so it never bleeds over the box border; short names
+  draw statically.
+
 ## [1.0.1] - 2026-08-03
 
 ### Fixed
