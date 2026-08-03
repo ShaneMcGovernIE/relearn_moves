@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2] - 2026-08-03
+
+### Changed
+
+- The name ticker is slower: scroll speed 24 to 16 px/s, and each end
+  hold 1.2 to 1.6 seconds.
+
 ## [1.1.1] - 2026-08-03
 
 ### Fixed

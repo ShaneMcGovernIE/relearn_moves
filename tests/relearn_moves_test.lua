@@ -150,17 +150,18 @@ T.eq(hookedBattle, battle, "runtime hook leaves battle alone")
 
 -- ---------------------------------------------------------------- ticker
 
--- TICKER_HOLD = 1.2s, TICKER_SPEED = 24px/s; overflow 40 -> scroll 5/3s
-local T_HOLD = 1.2
-local T_SCROLL = 40 / 24
+-- TICKER_HOLD = 1.6s, TICKER_SPEED = 16px/s; overflow 40 -> scroll 2.5s
+local T_HOLD = 1.6
+local T_SCROLL = 40 / 16
 local T_CYCLE = 2 * T_HOLD + 2 * T_SCROLL
 T.eq(ex.tickerOffset(0, 40), 0, "ticker starts at the label head")
 T.eq(ex.tickerOffset(0.5, 40), 0, "start hold keeps the label still")
-T.eq(ex.tickerOffset(T_HOLD + 0.5, 40), -12, "scroll out at 24px/s")
-T.eq(ex.tickerOffset(T_HOLD + T_SCROLL, 40), -40, "scroll out reaches the tail")
+T.eq(ex.tickerOffset(T_HOLD + 0.5, 40), -8, "scroll out at 16px/s")
+T.check(math.abs(ex.tickerOffset(T_HOLD + T_SCROLL, 40) + 40) < 1e-9,
+        "scroll out reaches the tail")
 T.eq(ex.tickerOffset(T_HOLD + T_SCROLL + 0.6, 40), -40,
      "end hold shows the tail")
-T.check(math.abs(ex.tickerOffset(T_HOLD + T_SCROLL + T_HOLD + 0.25, 40) + 34) < 1e-9,
+T.check(math.abs(ex.tickerOffset(T_HOLD + T_SCROLL + T_HOLD + 0.25, 40) + 36) < 1e-9,
         "scroll back retraces")
 T.eq(ex.tickerOffset(T_CYCLE + 0.1, 40), 0, "the cycle wraps to a new hold")
 T.eq(ex.tickerOffset(5, 0), 0, "a fitting label never scrolls")

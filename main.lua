@@ -207,9 +207,9 @@ local NAME_X = CLIP_X + LEVEL_W + 8
 local NAME_CLIP_W = 152 - NAME_X -- 56px = 7 glyphs
 
 -- Ticker hold/scroll pacing: hold at each end so the player can read the
--- whole name, scroll at 24px/s (about a glyph every 1/3s).
-local TICKER_HOLD = 1.2
-local TICKER_SPEED = 24
+-- whole name, scroll at 16px/s (half a second per glyph).
+local TICKER_HOLD = 1.6
+local TICKER_SPEED = 16
 
 -- Pure (mod.exports.tickerOffset for headless tests): horizontal offset
 -- for an overflowing label at time t (seconds).  Cycle: hold at 0, scroll
