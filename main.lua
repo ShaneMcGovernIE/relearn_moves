@@ -194,12 +194,17 @@ end
 
 -- Box is 16 tiles at (4,5) (TextBoxBorder 4,7, MoveLearnMenu's geometry);
 -- names start at x=48, one glyph in from the box's left border.  The
--- engine's own text convention pads 8px inside the box, so labels clip at
--- the inner right edge: 152.  The GB font is a flat 8px/glyph, so a label
--- wider than 13 glyphs ("LV  7 WING ATTACK" is 15) would run past the
--- border and gets a scrolling ticker instead.
+-- engine's own text convention pads 8px inside the box, so text clips at
+-- the inner right edge: 152.  The GB font is a flat 8px/glyph.
+--
+-- Each row is two zones: the learned-at level ("LV%3d", 5 glyphs) stays
+-- fixed at the row's left, and the move name sits after it in its own
+-- clip window.  A name wider than that window scrolls as a ticker; the
+-- level never moves.
 local CLIP_X = 48
-local CLIP_W = 152 - CLIP_X -- 104px = 13 glyphs
+local LEVEL_W = 40 -- "LV%3d" = 5 glyphs at 8px
+local NAME_X = CLIP_X + LEVEL_W + 8
+local NAME_CLIP_W = 152 - NAME_X -- 56px = 7 glyphs
 
 -- Ticker hold/scroll pacing: hold at each end so the player can read the
 -- whole name, scroll at 24px/s (about a glyph every 1/3s).
@@ -224,20 +229,22 @@ function MoveRelearn.tickerOffset(t, overflow)
   return -overflow + p * TICKER_SPEED
 end
 
--- Draw one label, tickering when it overflows the box's text window.
--- love.graphics.setScissor bounds the marquee to the row so the text
--- never bleeds over the box border; the clip is cleared per row.
-local function drawRowLabel(game, label, row, tick)
+-- Draw one row: the level prefix fixed, then the move name, tickering
+-- when the NAME alone overflows its window.  love.graphics.setScissor
+-- bounds the marquee to the name's window so the text never bleeds over
+-- the box border; the clip is cleared per row.
+local function drawRowLabel(game, prefix, name, row, tick)
   local y = (5 + row) * 8
-  local w = Font.width(label)
-  if w <= CLIP_W then
-    Font.draw(label, CLIP_X, y)
+  Font.draw(prefix, CLIP_X, y)
+  local w = Font.width(name)
+  if w <= NAME_CLIP_W then
+    Font.draw(name, NAME_X, y)
     return
   end
   if love and love.graphics and love.graphics.setScissor then
-    love.graphics.setScissor(CLIP_X, y, CLIP_W, 8)
+    love.graphics.setScissor(NAME_X, y, NAME_CLIP_W, 8)
   end
-  Font.draw(label, CLIP_X + MoveRelearn.tickerOffset(tick or 0, w - CLIP_W), y)
+  Font.draw(name, NAME_X + MoveRelearn.tickerOffset(tick or 0, w - NAME_CLIP_W), y)
   if love and love.graphics and love.graphics.setScissor then
     love.graphics.setScissor()
   end
@@ -264,9 +271,8 @@ function MoveRelearn:draw()
     local last = math.min(#self.list, self.scroll + ROWS)
     for i = self.scroll + 1, last do
       local e = self.list[i]
-      drawRowLabel(self.game, ("%s %s"):format(("LV%3d"):format(e.level),
-                                               e.name), i - self.scroll,
-                   self.tick)
+      drawRowLabel(self.game, ("LV%3d"):format(e.level), e.name,
+                   i - self.scroll, self.tick)
     end
     Font.drawCode(CURSOR, 40, (5 + self.index - self.scroll) * 8)
     Font.drawBox(0, 12, 20, 6)

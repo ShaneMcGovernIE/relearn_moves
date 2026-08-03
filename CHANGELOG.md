@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1] - 2026-08-03
+
+### Fixed
+
+- The relearn-list ticker scrolls only the move name now. The learned-at
+  level stays fixed at the row's left edge; the name ticks inside its own
+  clip window.
+
 ## [1.1.0] - 2026-08-03
 
 ### Added
