@@ -6,6 +6,10 @@ local Runtime = require("src.mods.Runtime")
 local Data = require("src.core.Data")
 Data:load()
 
+-- The engine reads the forget gate from constants.hmMoves (the fixture
+-- only carries FIX_CUT); seed the real HM set the screen flow relies on.
+Data.constants.hmMoves = { "CUT" }
+
 -- Seed moves + a species with a real movelist (the fixture only carries
 -- FIX_* content) so the level gate and dedupe can be observed.
 Data.moves.FIX_TACKLE = { id = "FIX_TACKLE", name = "TACKLE", type = "NORMAL",
@@ -64,6 +68,7 @@ T.eq(#lv7, 1, "level 7 opens EMBERISH")
 T.eq(lv7[1].level, 7, "learn level carried")
 T.eq(lv7[1].move, "FIX_EMBERISH", "learn id carried")
 T.eq(lv7[1].name, "EMBER", "name resolved from data.moves")
+T.eq(lv7[1].pp, 25, "learned PP carried from the move def")
 local lv36 = ex.buildRelearnable(Data, Data.pokemon.FIXMON_REL,
   mon(36, { { id = "FIX_TACKLE" }, { id = "FIX_EMBERISH" },
             { id = "FIX_THUNDER" } }))
@@ -169,6 +174,13 @@ T.eq(ex.tickerOffset(5, nil), 0, "nil overflow never scrolls")
 T.eq(ex.tickerOffset(0, 40), ex.tickerOffset(T_CYCLE, 40),
      "cycle boundary matches the start")
 
+-- ------------------------------------------------------ data-driven HM gate
+
+T.eq(ex.isHM(Data, "CUT"), true, "constants.hmMoves gates CUT")
+T.eq(ex.isHM(Data, "FIX_GROWL"), false, "non-HM moves stay forgettable")
+T.eq(ex.isHM(nil, "SURF"), true, "vanilla fallback when data is absent")
+T.eq(ex.isHM(nil, "TACKLE"), false, "fallback rejects non-HM ids")
+
 -- ---------------------------------------------------- the learn-flow screen
 
 local stack = { list = {} }
@@ -192,6 +204,32 @@ T.neq(Data.screens["MoveRelearn"], nil, "screen registered into data.screens")
 local Screens = require("src.ui.Screens")
 local mk = Screens.get(screenGame(), "MoveRelearn")
 T.neq(mk, nil, "screens registry resolves the MoveRelearn factory")
+
+-- the submenu entry's onSelect pushes the screen with the selected mon
+do
+  stack.list = {}
+  local g = screenGame()
+  local entry = ex.injectSubmenu(Data, fieldItems(),
+                                 mon(20, { { id = "FIX_TACKLE" } }),
+                                 { battle = false })[2]
+  local target = mon(20, { { id = "FIX_TACKLE" } })
+  entry.onSelect(target, g)
+  T.eq(#g.stack.list, 1, "onSelect pushes one screen")
+  local pushed = g.stack.list[1]
+  T.eq(pushed.mon, target, "the pushed screen carries the selected mon")
+  T.eq(pushed.list[1].move, "FIX_EMBERISH",
+       "the pushed screen built its relearn list")
+end
+
+-- monName: nickname wins, species name falls back
+do
+  local g = screenGame()
+  local scr = mk.new(g, { species = "FIXMON_REL", level = 5, moves = {},
+                          nickname = "SPARKY" })
+  T.eq(scr:monName(), "SPARKY", "nickname wins over species name")
+  local plain = mk.new(g, mon(5, {}))
+  T.eq(plain:monName(), "FIXMON REL", "species name fallback")
+end
 
 -- learn into an open slot: A on the first relearnable move
 do

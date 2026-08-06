@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Sound effects: cursor/A-accept click (Press_AB), the Get_Item2 chime on a
+  successful relearn, matching the vanilla party-menu feel.
+- The relearn list shows each move's learned PP ("PP%2d", right-aligned);
+  the forget list shows the current moves' PP too.
+- A more-arrow (▼) on the relearn list's bottom border when there are moves
+  below the visible window.
+- Hold-to-scroll on Up/Down in both the relearn list and the forget list
+  (ListMenu key-repeat pacing: 16-frame delay, then every 4 frames).
+- The HM forget-gate is now data-driven off `constants.hmMoves`, so a mod
+  or imported dataset that extends the HM set gates here too. Falls back to
+  the vanilla five when data is absent.
+
+### Changed
+
+- The RELEARN submenu entry now anchors on the STATS row instead of a fixed
+  index, so it stays between STATS and SWITCH even if the engine reorders
+  rows (a missing anchor appends at the end).
+- The forget-list box is two tiles wider to make room for the PP column;
+  the relearn name clip window narrows to 6 glyphs accordingly.
+
 ## [1.1.2] - 2026-08-03
 
 ### Changed

@@ -14,11 +14,30 @@
 local Font = require("src.render.Font")
 local Strings = require("src.core.Strings")
 local Screens = require("src.ui.Screens")
+local Sound = require("src.core.Sound")
+local Theme = require("src.ui.Theme")
 
--- data/moves/hm_moves.asm (IsMoveHM): the same gate MoveLearnMenu applies
+-- Vanilla HM set (data/moves/hm_moves.asm, IsMoveHM); the runtime gate is
+-- data-driven off constants.hmMoves (Data.lua:31) and falls back here when
+-- data is absent (headless fixtures without the registry).
 local HM_MOVES = {
   CUT = true, FLY = true, SURF = true, STRENGTH = true, FLASH = true,
 }
+
+-- Pure (mod.exports.isHM for headless tests): the engine's forget gate
+-- (the same set MoveLearnMenu applies via IsMoveHM).  Reads the live
+-- constants.hmMoves list -- so a mod or imported dataset that extends the
+-- HM set gates here too -- and falls back to the vanilla five.
+local function isHM(data, moveId)
+  local hm = data and data.constants and data.constants.hmMoves
+  if hm then
+    for _, id in ipairs(hm) do
+      if id == moveId then return true end
+    end
+    return false
+  end
+  return HM_MOVES[moveId] == true
+end
 
 -- Pure (mod.exports.buildRelearnable for headless tests): the moves a mon
 -- may relearn -- level-1 moves plus learnset entries at or below its
@@ -35,6 +54,7 @@ local function buildRelearnable(data, def, mon)
       level = level,
       move = move,
       name = (mdef and mdef.name) or move,
+      pp = (mdef and mdef.pp) or 0,
     }
   end
   for _, id in ipairs(def.level1Moves or {}) do add(1, id) end
@@ -74,20 +94,27 @@ local function injectSubmenu(data, items, mon, ctx)
   for _, e in ipairs(items) do
     if e.relearn then return items end
   end
-  local out = {}
+  local entry = {
+    label = Strings("RELEARN"),
+    relearn = true,
+    onSelect = function(selMon, game)
+      Screens.push(game, "MoveRelearn", selMon)
+    end,
+  }
+  -- Anchor on the STATS label (the mod.ui.insertAfter pattern) so RELEARN
+  -- stays between STATS and SWITCH even if the engine reorders rows; a
+  -- missing anchor appends at the end instead of losing the entry.
   for i, e in ipairs(items) do
-    if i == 2 then
-      out[#out + 1] = {
-        label = Strings("RELEARN"),
-        relearn = true,
-        onSelect = function(selMon, game)
-          Screens.push(game, "MoveRelearn", selMon)
-        end,
-      }
+    if e.label == "STATS" then
+      local out = {}
+      for j = 1, i do out[#out + 1] = items[j] end
+      out[#out + 1] = entry
+      for j = i + 1, #items do out[#out + 1] = items[j] end
+      return out
     end
-    out[#out + 1] = e
   end
-  return out
+  items[#items + 1] = entry
+  return items
 end
 
 -- ---------- the learn flow screen (over the still-open party menu) ----------
@@ -107,6 +134,7 @@ function MoveRelearn.new(game, mon)
   self.index = 1
   self.scroll = 0
   self.tick = 0
+  self.hold = { up = 0, down = 0 } -- hold-to-scroll timers (navRepeat)
   -- nil, or { move, index } while choosing a slot to replace
   self.forgetting = nil
   return self
@@ -123,26 +151,60 @@ function MoveRelearn:finish(message)
   self.game.stack:push(TextBox.new(self.game, message))
 end
 
+-- Hold-to-scroll (the ListMenu keyRepeat pacing: REPEAT_DELAY 16 fixed
+-- frames, then REPEAT_RATE 4, at 60fps).  One step on the press edge,
+-- then repeat while the key stays down.  `step` moves the cursor one row
+-- (closures below own the wrap-around).
+function MoveRelearn:navRepeat(dt, dir, step)
+  local input = self.game.input
+  if input:wasPressed(dir) then
+    self.hold[dir] = 0
+    step()
+    return
+  end
+  if input.isDown and input:isDown(dir) then
+    self.hold[dir] = self.hold[dir] + (dt or 0)
+    while self.hold[dir] >= REPEAT_DELAY do
+      step()
+      self.hold[dir] = self.hold[dir] - REPEAT_RATE
+    end
+  else
+    self.hold[dir] = 0
+  end
+end
+
+-- Cursor/A-accept are the engine's Press_AB click; a successful learn ends
+-- with the Get_Item2 chime.  Headless (no love) is a safe no-op.
+local function beep(game, id)
+  if game and game.data then
+    Sound.play(game.data, id or "Press_AB")
+  end
+end
+
 function MoveRelearn:update(dt)
   self.tick = (self.tick or 0) + (dt or 0)
   local input = self.game.input
   if self.forgetting then
     local n = #self.mon.moves + 1 -- moves + CANCEL
-    if input:wasPressed("up") then
+    self:navRepeat(dt, "up", function()
       self.forgetting.index = self.forgetting.index > 1
         and self.forgetting.index - 1 or n
-    elseif input:wasPressed("down") then
+    end)
+    self:navRepeat(dt, "down", function()
       self.forgetting.index = self.forgetting.index < n
         and self.forgetting.index + 1 or 1
-    elseif input:wasPressed("b") then
+    end)
+    if input:wasPressed("b") then
+      beep(self.game)
       self.forgetting = nil
     elseif input:wasPressed("a") then
+      beep(self.game)
       if self.forgetting.index > #self.mon.moves then
         self.forgetting = nil -- CANCEL back to the relearn list
         return
       end
       local old = self.mon.moves[self.forgetting.index]
-      if HM_MOVES[old.id] then
+      if isHM(self.game.data, old.id) then
         -- HMCantDeleteText, then back to the forget list
         local TextBox = require("src.render.TextBox")
         self.game.stack:push(TextBox.new(self.game,
@@ -155,6 +217,7 @@ function MoveRelearn:update(dt)
       local name = self:monName()
       self.forgetting = nil
       applyMove(self.game.data, self.mon, move, slot)
+      beep(self.game, "Get_Item2")
       self:finish(Strings(
         "1, 2 and... Poof!\f%s forgot\n%s!\fAnd...\f%s learned\n%s!",
         name, self.game.data.moves[old.id].name, name, mdef.name))
@@ -163,23 +226,27 @@ function MoveRelearn:update(dt)
   end
   local n = #self.list
   if n == 0 then
-    -- nothing to relearn (the RELEARN entry is only injected when non-empty,
-    -- so this is just a belt-and-braces exit)
+    -- The RELEARN entry is always injected out of battle, so an empty list
+    -- here is rare (a mon with nothing left to learn after a move was
+    -- removed from its learnset).  It reads "No moves to relearn." in draw;
+    -- any button exits cleanly.
     if input:wasPressed("a") or input:wasPressed("b") then
+      beep(self.game)
       self.game.stack:pop()
     end
     return
   end
-  if input:wasPressed("up") then
-    self.index = math.max(1, self.index - 1)
-  elseif input:wasPressed("down") then
-    self.index = math.min(n, self.index + 1)
-  elseif input:wasPressed("b") then
+  self:navRepeat(dt, "up", function() self.index = math.max(1, self.index - 1) end)
+  self:navRepeat(dt, "down", function() self.index = math.min(n, self.index + 1) end)
+  if input:wasPressed("b") then
+    beep(self.game)
     self.game.stack:pop()
   elseif input:wasPressed("a") then
+    beep(self.game)
     local entry = self.list[self.index]
     if #self.mon.moves < 4 then
       applyMove(self.game.data, self.mon, entry.move)
+      beep(self.game, "Get_Item2")
       self:finish(Strings("%s learned\n%s!", self:monName(), entry.name))
     else
       self.forgetting = { move = entry.move, index = 1 }
@@ -192,24 +259,32 @@ function MoveRelearn:update(dt)
   end
 end
 
--- Box is 16 tiles at (4,5) (TextBoxBorder 4,7, MoveLearnMenu's geometry);
--- names start at x=48, one glyph in from the box's left border.  The
--- engine's own text convention pads 8px inside the box, so text clips at
--- the inner right edge: 152.  The GB font is a flat 8px/glyph.
+-- Box is 18 tiles at (2,5), two tiles wider than MoveLearnMenu's forget
+-- list so each row has room for a PP column.  The engine's text
+-- convention pads 8px inside the box, so text clips at the inner right
+-- edge: 152.  The GB font is a flat 8px/glyph.
 --
--- Each row is two zones: the learned-at level ("LV%3d", 5 glyphs) stays
--- fixed at the row's left, and the move name sits after it in its own
--- clip window.  A name wider than that window scrolls as a ticker; the
--- level never moves.
-local CLIP_X = 48
+-- Each relearn row is three zones: the learned-at level ("LV%3d", 5
+-- glyphs) fixed at the row's left, the move name in its own clip window
+-- (a name wider than it scrolls as a ticker; the level never moves), and
+-- the learned PP ("PP%2d", 4 glyphs) right-aligned, which never scrolls.
+local BOX_TX, BOX_TY, BOX_TW, BOX_TH = 2, 5, 18, 7
+local CLIP_X = 24 -- 8px in from the widened box's inner edge (16)
 local LEVEL_W = 40 -- "LV%3d" = 5 glyphs at 8px
 local NAME_X = CLIP_X + LEVEL_W + 8
-local NAME_CLIP_W = 152 - NAME_X -- 56px = 7 glyphs
+local PP_W = 32 -- "PP%2d" = 4 glyphs at 8px
+local PP_X = 152 - PP_W
+local NAME_CLIP_W = PP_X - NAME_X -- 48px = 6 glyphs
 
 -- Ticker hold/scroll pacing: hold at each end so the player can read the
 -- whole name, scroll at 16px/s (half a second per glyph).
 local TICKER_HOLD = 1.6
 local TICKER_SPEED = 16
+
+-- Hold-to-scroll pacing in seconds (the ListMenu keyRepeat: REPEAT_DELAY
+-- 16 / REPEAT_RATE 4 fixed frames at 60fps).
+local REPEAT_DELAY = 16 / 60
+local REPEAT_RATE = 4 / 60
 
 -- Pure (mod.exports.tickerOffset for headless tests): horizontal offset
 -- for an overflowing label at time t (seconds).  Cycle: hold at 0, scroll
@@ -229,13 +304,15 @@ function MoveRelearn.tickerOffset(t, overflow)
   return -overflow + p * TICKER_SPEED
 end
 
--- Draw one row: the level prefix fixed, then the move name, tickering
--- when the NAME alone overflows its window.  love.graphics.setScissor
--- bounds the marquee to the name's window so the text never bleeds over
--- the box border; the clip is cleared per row.
-local function drawRowLabel(game, prefix, name, row, tick)
+-- Draw one row: the level prefix fixed at the left, the learned PP
+-- right-aligned, then the move name, tickering when the NAME alone
+-- overflows its window (which ends before the PP column).  The
+-- love.graphics.setScissor bounds the marquee so text never bleeds over
+-- the box border or under the PP; the clip is cleared per row.
+local function drawRowLabel(game, prefix, name, pp, row, tick)
   local y = (5 + row) * 8
   Font.draw(prefix, CLIP_X, y)
+  Font.draw(("PP%2d"):format(pp), PP_X, y)
   local w = Font.width(name)
   if w <= NAME_CLIP_W then
     Font.draw(name, NAME_X, y)
@@ -251,30 +328,36 @@ local function drawRowLabel(game, prefix, name, row, tick)
 end
 
 function MoveRelearn:draw()
-  -- same box geometry as MoveLearnMenu's forget list (TextBoxBorder 4,7)
-  Font.drawBox(4, 5, 16, 7)
+  Font.drawBox(BOX_TX, BOX_TY, BOX_TW, BOX_TH)
   love.graphics.setColor(0, 0, 0, 1)
   if self.forgetting then
     for i, mv in ipairs(self.mon.moves) do
-      Font.draw(self.game.data.moves[mv.id].name, 48, (5 + i) * 8)
+      Font.draw(self.game.data.moves[mv.id].name, CLIP_X, (5 + i) * 8)
+      Font.draw(("PP%2d"):format(mv.pp or 0), PP_X, (5 + i) * 8)
     end
-    Font.draw(Strings("CANCEL"), 48, (6 + #self.mon.moves) * 8)
-    Font.drawCode(CURSOR, 40, (5 + self.forgetting.index) * 8)
+    Font.draw(Strings("CANCEL"), CLIP_X, (6 + #self.mon.moves) * 8)
+    Font.drawCode(CURSOR, CLIP_X - 8, (5 + self.forgetting.index) * 8)
     Font.drawBox(0, 12, 20, 6)
     Font.draw(Strings("Which move should"), 8, 14 * 8)
     Font.draw(Strings("be forgotten?"), 8, 16 * 8)
   elseif #self.list == 0 then
-    Font.draw(Strings("No moves to\nrelearn."), 48, 48)
+    Font.draw(Strings("No moves to\nrelearn."), CLIP_X, 48)
     Font.drawBox(0, 12, 20, 6)
     Font.draw(Strings("Nothing to\nrelearn."), 8, 14 * 8)
   else
     local last = math.min(#self.list, self.scroll + ROWS)
     for i = self.scroll + 1, last do
       local e = self.list[i]
-      drawRowLabel(self.game, ("LV%3d"):format(e.level), e.name,
+      drawRowLabel(self.game, ("LV%3d"):format(e.level), e.name, e.pp,
                    i - self.scroll, self.tick)
     end
-    Font.drawCode(CURSOR, 40, (5 + self.index - self.scroll) * 8)
+    Font.drawCode(CURSOR, CLIP_X - 8, (5 + self.index - self.scroll) * 8)
+    -- moreArrow ($EE): more moves below the visible window, sitting on the
+    -- box's bottom border (the Menu/ListMenu pattern)
+    if #self.list > ROWS and self.scroll + ROWS < #self.list then
+      Font.drawCode(Theme.moreArrow,
+        (BOX_TX + BOX_TW - 2) * 8, (BOX_TY + BOX_TH - 1) * 8)
+    end
     Font.drawBox(0, 12, 20, 6)
     Font.draw(Strings("Relearn which"), 8, 14 * 8)
     Font.draw(Strings("move?"), 8, 16 * 8)
@@ -288,6 +371,7 @@ return function(mod)
   mod.exports.injectSubmenu = injectSubmenu
   mod.exports.tickerOffset = MoveRelearn.tickerOffset
   mod.exports.HM_MOVES = HM_MOVES
+  mod.exports.isHM = isHM
 
   mod.content.screens:register("MoveRelearn", { new = MoveRelearn.new })
 
