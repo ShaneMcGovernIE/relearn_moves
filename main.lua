@@ -124,6 +124,11 @@ MoveRelearn.__index = MoveRelearn
 
 local CURSOR = 0xED
 local ROWS = 5 -- forget-list geometry from MoveLearnMenu: 4 moves + CANCEL
+-- Hold-to-scroll pacing in seconds (the ListMenu keyRepeat: REPEAT_DELAY
+-- 16 / REPEAT_RATE 4 fixed frames at 60fps).  Declared before navRepeat so
+-- the function closes over the locals (a later local is invisible to it).
+local REPEAT_DELAY = 16 / 60
+local REPEAT_RATE = 4 / 60
 
 function MoveRelearn.new(game, mon)
   local self = setmetatable({}, MoveRelearn)
@@ -280,11 +285,6 @@ local NAME_CLIP_W = PP_X - NAME_X -- 48px = 6 glyphs
 -- whole name, scroll at 16px/s (half a second per glyph).
 local TICKER_HOLD = 1.6
 local TICKER_SPEED = 16
-
--- Hold-to-scroll pacing in seconds (the ListMenu keyRepeat: REPEAT_DELAY
--- 16 / REPEAT_RATE 4 fixed frames at 60fps).
-local REPEAT_DELAY = 16 / 60
-local REPEAT_RATE = 4 / 60
 
 -- Pure (mod.exports.tickerOffset for headless tests): horizontal offset
 -- for an overflowing label at time t (seconds).  Cycle: hold at 0, scroll

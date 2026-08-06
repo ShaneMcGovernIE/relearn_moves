@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Key-repeat (hold-to-scroll) crashed with "attempt to compare nil with
+  number" in the real game: `REPEAT_DELAY`/`REPEAT_RATE` were declared
+  after `navRepeat`, so the function read them as nil globals.  They are
+  now declared before the function.  Headless stubs never hit this path,
+  so a regression test now drives the `input.isDown` branch directly.
+
 ### Added
 
 - Sound effects: cursor/A-accept click (Press_AB), the Get_Item2 chime on a

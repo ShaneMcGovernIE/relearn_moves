@@ -309,5 +309,23 @@ do
   T.eq(#g.stack.list, 0, "B pops the relearn screen")
 end
 
+-- hold-to-scroll: the navRepeat branch needs input.isDown (the headless
+-- screenGame() stub only has wasPressed, so the repeat path was never
+-- exercised -- regression for REPEAT_DELAY/REPEAT_RATE being declared
+-- after navRepeat, which made them nil globals in the real game)
+do
+  stack.list = {}
+  local held = { down = true }
+  local g = screenGame()
+  g.input.isDown = function(_, key) return held[key] == true end
+  local scr = mk.new(g, mon(40, {})) -- empty moveset: all 5 learnable rows
+  T.check(#scr.list >= 5, "relearn list has enough rows to scroll")
+  local start = scr.index
+  for _ = 1, 5 do scr:update(16 / 60) end -- five 16-frame ticks holding down
+  T.check(scr.index > start, "holding down scrolls past the first row")
+  T.eq(scr.index, math.min(#scr.list, start + 5),
+       "cursor stepped once per REPEAT_DELAY interval")
+end
+
 run.release()
 T.finish("relearn_moves")
