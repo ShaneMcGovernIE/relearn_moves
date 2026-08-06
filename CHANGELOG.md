@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The relearn row layout hugs the level now: the move name starts right
+  after the level digits (with a fixed gap) instead of at a fixed column,
+  and the name window stops a glyph short of the PP column, so ticker text
+  no longer runs into the right-aligned PP.
+
 ### Fixed
 
 - The relearn list's learned-at level is now "LV" + digits with no gap

@@ -271,17 +271,17 @@ end
 --
 -- Each relearn row is three zones: the learned-at level ("LV" + digits,
 -- the number left-aligned against "LV" like the engine's PrintLevel,
--- no padding) fixed at the row's left, the move name in its own clip
--- window (a name wider than it scrolls as a ticker; the level never
--- moves), and the learned PP ("PP%2d", 4 glyphs) right-aligned, which
--- never scrolls.
+-- no padding) at the row's left, the move name starting right after the
+-- level digits (a name wider than the window scrolls as a ticker; the
+-- level never moves), and the learned PP ("PP%2d", 4 glyphs)
+-- right-aligned, which never scrolls.  A fixed gap separates the level
+-- from the name, and the name window from the PP column.
 local BOX_TX, BOX_TY, BOX_TW, BOX_TH = 2, 5, 18, 7
 local CLIP_X = 24 -- 8px in from the widened box's inner edge (16)
-local LEVEL_W = 40 -- level column reserve: "LV" + up to 3 digits (5 glyphs)
-local NAME_X = CLIP_X + LEVEL_W + 8
+local NAME_GAP = 8 -- gap between the level digits and the move name
+local PP_GAP = 8 -- gap between the name window and the right-aligned PP
 local PP_W = 32 -- "PP%2d" = 4 glyphs at 8px
 local PP_X = 152 - PP_W
-local NAME_CLIP_W = PP_X - NAME_X -- 48px = 6 glyphs
 
 -- Ticker hold/scroll pacing: hold at each end so the player can read the
 -- whole name, scroll at 16px/s (half a second per glyph).
@@ -307,23 +307,26 @@ function MoveRelearn.tickerOffset(t, overflow)
 end
 
 -- Draw one row: the level prefix fixed at the left, the learned PP
--- right-aligned, then the move name, tickering when the NAME alone
--- overflows its window (which ends before the PP column).  The
--- love.graphics.setScissor bounds the marquee so text never bleeds over
--- the box border or under the PP; the clip is cleared per row.
+-- right-aligned, then the move name starting right after the level
+-- digits, tickering when the NAME alone overflows its window (which
+-- stops a fixed gap before the PP column).  The love.graphics.setScissor
+-- bounds the marquee so text never bleeds over the box border or under
+-- the PP; the clip is cleared per row.
 local function drawRowLabel(game, prefix, name, pp, row, tick)
   local y = (5 + row) * 8
   Font.draw(prefix, CLIP_X, y)
   Font.draw(("PP%2d"):format(pp), PP_X, y)
+  local x = CLIP_X + Font.width(prefix) + NAME_GAP
+  local clipW = PP_X - x - PP_GAP
   local w = Font.width(name)
-  if w <= NAME_CLIP_W then
-    Font.draw(name, NAME_X, y)
+  if w <= clipW then
+    Font.draw(name, x, y)
     return
   end
   if love and love.graphics and love.graphics.setScissor then
-    love.graphics.setScissor(NAME_X, y, NAME_CLIP_W, 8)
+    love.graphics.setScissor(x, y, clipW, 8)
   end
-  Font.draw(name, NAME_X + MoveRelearn.tickerOffset(tick or 0, w - NAME_CLIP_W), y)
+  Font.draw(name, x + MoveRelearn.tickerOffset(tick or 0, w - clipW), y)
   if love and love.graphics and love.graphics.setScissor then
     love.graphics.setScissor()
   end
