@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- When a mon has nothing to relearn, the empty move list box is gone —
+  only the "No moves to relearn." message shows in the dialogue box below.
+
 ## [1.2.0] - 2026-08-06
 
 ### Added

@@ -233,8 +233,8 @@ function MoveRelearn:update(dt)
   if n == 0 then
     -- The RELEARN entry is always injected out of battle, so an empty list
     -- here is rare (a mon with nothing left to learn after a move was
-    -- removed from its learnset).  It reads "No moves to relearn." in draw;
-    -- any button exits cleanly.
+    -- removed from its learnset).  It reads "No moves to relearn." in the
+    -- dialogue box below (no move list box); any button exits cleanly.
     if input:wasPressed("a") or input:wasPressed("b") then
       beep(self.game)
       self.game.stack:pop()
@@ -333,7 +333,9 @@ local function drawRowLabel(game, prefix, name, pp, row, tick)
 end
 
 function MoveRelearn:draw()
-  Font.drawBox(BOX_TX, BOX_TY, BOX_TW, BOX_TH)
+  if self.forgetting or #self.list > 0 then
+    Font.drawBox(BOX_TX, BOX_TY, BOX_TW, BOX_TH)
+  end
   love.graphics.setColor(0, 0, 0, 1)
   if self.forgetting then
     for i, mv in ipairs(self.mon.moves) do
@@ -346,9 +348,10 @@ function MoveRelearn:draw()
     Font.draw(Strings("Which move should"), 8, 14 * 8)
     Font.draw(Strings("be forgotten?"), 8, 16 * 8)
   elseif #self.list == 0 then
-    Font.draw(Strings("No moves to\nrelearn."), CLIP_X, 48)
+    -- No move list box: just the message in the dialogue box below (any
+    -- button exits, handled in update).
     Font.drawBox(0, 12, 20, 6)
-    Font.draw(Strings("Nothing to\nrelearn."), 8, 14 * 8)
+    Font.draw(Strings("No moves to\nrelearn."), 8, 14 * 8)
   else
     local last = math.min(#self.list, self.scroll + ROWS)
     for i = self.scroll + 1, last do
