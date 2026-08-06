@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.2.0] - 2026-08-06
+
+### Added
+
+- Sound effects on the relearn screens: a Press_AB click for cursor moves
+  and accept, plus the Get_Item2 chime on a successful relearn, matching
+  the vanilla party-menu feel.
+- PP display: learned PP right-aligned in the relearn list, and current PP
+  beside each move in the forget list (the box widened two tiles to fit).
+- A more-arrow (▼) on the relearn list's bottom border when moves scroll
+  below the visible window.
+- Hold-to-scroll on Up/Down in both the relearn and forget lists (16-frame
+  delay, then repeat every 4 frames at 60 fps).
+- The HM forget-gate is now data-driven off `constants.hmMoves`, falling
+  back to the vanilla five when data is absent.
+
+### Changed
+
+- The RELEARN submenu entry anchors on the STATS row instead of a fixed
+  index, so it stays between STATS and SWITCH even if the engine reorders
+  rows.
+- Relearn rows follow the engine's layout: "LV" + digits with no gap, the
+  move name right after the level, and a gap before the right-aligned PP
+  so ticking names never run into it.
+
+### Fixed
+
+- Hold-to-scroll crashed in-game ("attempt to compare nil with number"):
+  the key-repeat pacing constants were declared after the function that
+  used them, so they resolved as nil globals. They are now declared before
+  use, with a regression test covering the hold path.
+
 ## [1.1.2] - 2026-08-03
 
 ### Changed
