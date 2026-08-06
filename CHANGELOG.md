@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- The relearn list's learned-at level is now "LV" + digits with no gap
+  ("LV5", "LV40"), matching the engine's PrintLevel convention.  The old
+  `LV%3d` right-aligned the number in a 5-glyph field, leaving a large
+  gap between "LV" and single-digit levels.
 - Key-repeat (hold-to-scroll) crashed with "attempt to compare nil with
   number" in the real game: `REPEAT_DELAY`/`REPEAT_RATE` were declared
   after `navRepeat`, so the function read them as nil globals.  They are

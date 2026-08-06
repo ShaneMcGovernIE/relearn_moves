@@ -269,13 +269,15 @@ end
 -- convention pads 8px inside the box, so text clips at the inner right
 -- edge: 152.  The GB font is a flat 8px/glyph.
 --
--- Each relearn row is three zones: the learned-at level ("LV%3d", 5
--- glyphs) fixed at the row's left, the move name in its own clip window
--- (a name wider than it scrolls as a ticker; the level never moves), and
--- the learned PP ("PP%2d", 4 glyphs) right-aligned, which never scrolls.
+-- Each relearn row is three zones: the learned-at level ("LV" + digits,
+-- the number left-aligned against "LV" like the engine's PrintLevel,
+-- no padding) fixed at the row's left, the move name in its own clip
+-- window (a name wider than it scrolls as a ticker; the level never
+-- moves), and the learned PP ("PP%2d", 4 glyphs) right-aligned, which
+-- never scrolls.
 local BOX_TX, BOX_TY, BOX_TW, BOX_TH = 2, 5, 18, 7
 local CLIP_X = 24 -- 8px in from the widened box's inner edge (16)
-local LEVEL_W = 40 -- "LV%3d" = 5 glyphs at 8px
+local LEVEL_W = 40 -- level column reserve: "LV" + up to 3 digits (5 glyphs)
 local NAME_X = CLIP_X + LEVEL_W + 8
 local PP_W = 32 -- "PP%2d" = 4 glyphs at 8px
 local PP_X = 152 - PP_W
@@ -348,7 +350,7 @@ function MoveRelearn:draw()
     local last = math.min(#self.list, self.scroll + ROWS)
     for i = self.scroll + 1, last do
       local e = self.list[i]
-      drawRowLabel(self.game, ("LV%3d"):format(e.level), e.name, e.pp,
+      drawRowLabel(self.game, ("LV%d"):format(e.level), e.name, e.pp,
                    i - self.scroll, self.tick)
     end
     Font.drawCode(CURSOR, CLIP_X - 8, (5 + self.index - self.scroll) * 8)
