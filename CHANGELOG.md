@@ -1,47 +1,36 @@
 # Changelog
 
-## [Unreleased]
-
-### Changed
-
-- The relearn row layout hugs the level now: the move name starts right
-  after the level digits (with a fixed gap) instead of at a fixed column,
-  and the name window stops a glyph short of the PP column, so ticker text
-  no longer runs into the right-aligned PP.
-
-### Fixed
-
-- The relearn list's learned-at level is now "LV" + digits with no gap
-  ("LV5", "LV40"), matching the engine's PrintLevel convention.  The old
-  `LV%3d` right-aligned the number in a 5-glyph field, leaving a large
-  gap between "LV" and single-digit levels.
-- Key-repeat (hold-to-scroll) crashed with "attempt to compare nil with
-  number" in the real game: `REPEAT_DELAY`/`REPEAT_RATE` were declared
-  after `navRepeat`, so the function read them as nil globals.  They are
-  now declared before the function.  Headless stubs never hit this path,
-  so a regression test now drives the `input.isDown` branch directly.
+## [1.2.0] - 2026-08-06
 
 ### Added
 
-- Sound effects: cursor/A-accept click (Press_AB), the Get_Item2 chime on a
-  successful relearn, matching the vanilla party-menu feel.
-- The relearn list shows each move's learned PP ("PP%2d", right-aligned);
-  the forget list shows the current moves' PP too.
-- A more-arrow (▼) on the relearn list's bottom border when there are moves
+- Sound effects on the relearn screens: a Press_AB click for cursor moves
+  and accept, plus the Get_Item2 chime on a successful relearn, matching
+  the vanilla party-menu feel.
+- PP display: learned PP right-aligned in the relearn list, and current PP
+  beside each move in the forget list (the box widened two tiles to fit).
+- A more-arrow (▼) on the relearn list's bottom border when moves scroll
   below the visible window.
-- Hold-to-scroll on Up/Down in both the relearn list and the forget list
-  (ListMenu key-repeat pacing: 16-frame delay, then every 4 frames).
-- The HM forget-gate is now data-driven off `constants.hmMoves`, so a mod
-  or imported dataset that extends the HM set gates here too. Falls back to
-  the vanilla five when data is absent.
+- Hold-to-scroll on Up/Down in both the relearn and forget lists (16-frame
+  delay, then repeat every 4 frames at 60 fps).
+- The HM forget-gate is now data-driven off `constants.hmMoves`, falling
+  back to the vanilla five when data is absent.
 
 ### Changed
 
-- The RELEARN submenu entry now anchors on the STATS row instead of a fixed
+- The RELEARN submenu entry anchors on the STATS row instead of a fixed
   index, so it stays between STATS and SWITCH even if the engine reorders
-  rows (a missing anchor appends at the end).
-- The forget-list box is two tiles wider to make room for the PP column;
-  the relearn name clip window narrows to 6 glyphs accordingly.
+  rows.
+- Relearn rows follow the engine's layout: "LV" + digits with no gap, the
+  move name right after the level, and a gap before the right-aligned PP
+  so ticking names never run into it.
+
+### Fixed
+
+- Hold-to-scroll crashed in-game ("attempt to compare nil with number"):
+  the key-repeat pacing constants were declared after the function that
+  used them, so they resolved as nil globals. They are now declared before
+  use, with a regression test covering the hold path.
 
 ## [1.1.2] - 2026-08-03
 
