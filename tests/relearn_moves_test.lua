@@ -205,6 +205,53 @@ local Screens = require("src.ui.Screens")
 local mk = Screens.get(screenGame(), "MoveRelearn")
 T.neq(mk, nil, "screens registry resolves the MoveRelearn factory")
 
+-- ---------------------------------------------- qol_toggles HM-gate interop
+
+-- a fake loader shaped like the real one (Game.mods): mods / modOptions /
+-- exports keyed by mod id, with QoL Toggles' exported defaultFor
+local function qolLoader(forgettable, opts)
+  opts = opts or {}
+  local bucket = {}
+  if forgettable ~= nil then bucket.forgettable_hms = forgettable end
+  return {
+    mods = {
+      qol_toggles = {
+        enabled = opts.enabled ~= false,
+        failed = opts.failed == true,
+      },
+    },
+    modOptions = { qol_toggles = bucket },
+    exports = {
+      qol_toggles = {
+        defaultFor = function(key) return key == "forgettable_hms" end,
+      },
+    },
+  }
+end
+local function qolGame(forgettable, opts)
+  local g = screenGame()
+  g.mods = qolLoader(forgettable, opts)
+  return g
+end
+
+T.eq(ex.hmForgettable(screenGame()), false,
+     "no mods loader keeps the HM lock")
+T.eq(ex.hmForgettable({}), false, "missing game keeps the HM lock")
+T.eq(ex.hmForgettable(qolGame(nil)), true,
+     "toggle untouched (default ON) unlocks HMs with QoL Toggles present")
+T.eq(ex.hmForgettable(qolGame(true)), true, "FORGETTABLE HMs ON unlocks HMs")
+T.eq(ex.hmForgettable(qolGame(false)), false, "FORGETTABLE HMs OFF keeps the lock")
+do
+  local g = qolGame(nil)
+  g.mods.mods.qol_toggles.enabled = false
+  T.eq(ex.hmForgettable(g), false, "a disabled QoL Toggles keeps the lock")
+end
+do
+  local g = qolGame(nil)
+  g.mods.mods.qol_toggles.failed = true
+  T.eq(ex.hmForgettable(g), false, "a failed QoL Toggles keeps the lock")
+end
+
 -- the submenu entry's onSelect pushes the screen with the selected mon
 do
   stack.list = {}
@@ -297,6 +344,23 @@ do
   T.neq(scr.forgetting, nil, "forget list stays open after an HM pick")
   T.eq(target.moves[1].id, "CUT", "the HM move was not replaced")
   T.eq(#g.stack.list, 1, "only the HM-can't-delete box is on the stack")
+end
+
+-- full moveset: QoL Toggles FORGETTABLE HMs ON lets an HM be replaced
+do
+  stack.list = {}
+  local g = qolGame(true)
+  local seq = pressed(nil, nil, nil, "a",   -- list: A
+                      nil, nil, nil, "a")   -- forget: A on CUT (HM)
+  g.input.wasPressed = seq
+  local target = mon(40, { { id = "CUT" }, { id = "FIX_EMBERISH" },
+                           { id = "FIX_THUNDER" }, { id = "FIX_WATER_GUN" } })
+  local scr = mk.new(g, target)
+  scr:update(0)
+  scr:update(0)
+  T.eq(scr.forgetting, nil, "forget list closes after the HM swap")
+  T.eq(target.moves[1].id, "FIX_TACKLE", "the HM slot now holds the relearned move")
+  T.eq(#g.stack.list, 1, "screen popped, message box pushed")
 end
 
 -- B pops straight back to the party menu

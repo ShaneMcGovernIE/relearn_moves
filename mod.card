@@ -9,7 +9,7 @@ return {
       "the field party-menu submenu gains a RELEARN option at the bottom, after SWITCH",
       "RELEARN lists the mon's species movelist (level-1 moves plus learnset entries) at or below its current level, minus moves it already knows",
       "picking a move with a free slot learns it immediately at full base PP",
-      "a full moveset opens a forget list; HM moves can't be forgotten",
+      "a full moveset opens a forget list; HM moves can't be forgotten unless the QoL Toggles mod's FORGETTABLE HMs toggle is on",
     },
     added = {},
     known = {
