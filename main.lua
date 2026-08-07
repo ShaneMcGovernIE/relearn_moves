@@ -1,8 +1,8 @@
--- Move Relearn: adds a RELEARN entry to the field party-menu submenu
--- (between STATS and SWITCH) that lets a mon relearn any move from its
--- species movelist it has reached the level for.  A full moveset opens a
--- forget list (HM moves stay locked, like MoveLearnMenu); an empty slot
--- learns the move straight away.  Battle never sees the option.
+-- Move Relearn: adds a RELEARN entry to the bottom of the field party-menu
+-- submenu (after SWITCH) that lets a mon relearn any move from its species
+-- movelist it has reached the level for.  A full moveset opens a forget
+-- list (HM moves stay locked, like MoveLearnMenu); an empty slot learns
+-- the move straight away.  Battle never sees the option.
 --
 -- Wiring: the ui.party.submenu hook (src/ui/PartyMenu.lua:620) receives
 -- the vanilla item list after it is built; hook-injected entries carry an
@@ -84,10 +84,10 @@ local function applyMove(data, mon, moveId, replace)
   return old and old.id
 end
 
--- Pure (mod.exports.injectSubmenu for headless tests): insert the RELEARN
--- entry between STATS and SWITCH in the field party submenu.  Battle keeps
--- the vanilla list.  The entry is always present out of battle so the
--- feature is discoverable; a mon with nothing left to learn reads "No
+-- Pure (mod.exports.injectSubmenu for headless tests): append the RELEARN
+-- entry at the bottom of the field party submenu, after SWITCH.  Battle
+-- keeps the vanilla list.  The entry is always present out of battle so
+-- the feature is discoverable; a mon with nothing left to learn reads "No
 -- moves to relearn." in the flow screen instead of hiding the option.
 local function injectSubmenu(data, items, mon, ctx)
   if ctx and ctx.battle then return items end
@@ -101,18 +101,9 @@ local function injectSubmenu(data, items, mon, ctx)
       Screens.push(game, "MoveRelearn", selMon)
     end,
   }
-  -- Anchor on the STATS label (the mod.ui.insertAfter pattern) so RELEARN
-  -- stays between STATS and SWITCH even if the engine reorders rows; a
-  -- missing anchor appends at the end instead of losing the entry.
-  for i, e in ipairs(items) do
-    if e.label == "STATS" then
-      local out = {}
-      for j = 1, i do out[#out + 1] = items[j] end
-      out[#out + 1] = entry
-      for j = i + 1, #items do out[#out + 1] = items[j] end
-      return out
-    end
-  end
+  -- RELEARN goes at the bottom of the list, after SWITCH (SWITCH keeps the
+  -- second slot).  Appending is independent of any engine row ordering, so
+  -- the entry can never land between other options.
   items[#items + 1] = entry
   return items
 end

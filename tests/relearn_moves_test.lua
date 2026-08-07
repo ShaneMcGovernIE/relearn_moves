@@ -105,16 +105,16 @@ local function fieldItems()
 end
 local game = { data = Data }
 
--- relearnable mon: RELEARN lands between STATS and SWITCH
+-- relearnable mon: RELEARN lands at the bottom, after SWITCH
 local items = ex.injectSubmenu(Data, fieldItems(),
                                mon(20, { { id = "FIX_TACKLE" } }),
                                { battle = false })
 T.eq(#items, 3, "RELEARN inserted")
 T.eq(items[1].label, "STATS", "STATS stays first")
-T.eq(items[2].label, "RELEARN", "RELEARN sits between STATS and SWITCH")
-T.eq(items[3].label, "SWITCH", "SWITCH stays last")
-T.eq(type(items[2].onSelect), "function", "entry carries an onSelect callback")
-T.eq(items[2].relearn, true, "entry carries the idempotency marker")
+T.eq(items[2].label, "SWITCH", "SWITCH keeps the second slot")
+T.eq(items[3].label, "RELEARN", "RELEARN sits at the bottom")
+T.eq(type(items[3].onSelect), "function", "entry carries an onSelect callback")
+T.eq(items[3].relearn, true, "entry carries the idempotency marker")
 local again = ex.injectSubmenu(Data, items, mon(20, { { id = "FIX_TACKLE" } }),
                                { battle = false })
 T.eq(again, items, "injecting twice is a no-op")
@@ -130,12 +130,12 @@ local noneItems = fieldItems()
 local none = ex.injectSubmenu(Data, noneItems, mon(5, { { id = "FIX_TACKLE" } }),
                               { battle = false })
 T.eq(#none, 3, "mon with nothing to relearn still gets RELEARN")
-T.eq(none[2].label, "RELEARN", "the empty-list entry is RELEARN")
+T.eq(none[3].label, "RELEARN", "the empty-list entry is RELEARN")
 local nilDataItems = fieldItems()
-T.eq(ex.injectSubmenu(nil, nilDataItems, mon(50, {}), { battle = false })[2].label,
+T.eq(ex.injectSubmenu(nil, nilDataItems, mon(50, {}), { battle = false })[3].label,
      "RELEARN", "missing data still injects the entry")
 local nilMonItems = fieldItems()
-T.eq(ex.injectSubmenu(Data, nilMonItems, nil, { battle = false })[2].label,
+T.eq(ex.injectSubmenu(Data, nilMonItems, nil, { battle = false })[3].label,
      "RELEARN", "missing mon still injects the entry")
 
 -- ------------------------------------------------------- hook wiring (real)
@@ -146,7 +146,7 @@ local hooked = Runtime.call("ui.party.submenu",
                             mon(20, { { id = "FIX_TACKLE" } }),
                             { battle = false })
 T.eq(#hooked, 3, "ui.party.submenu hook injects through the runtime")
-T.eq(hooked[2].label, "RELEARN", "hook-injected entry is RELEARN")
+T.eq(hooked[3].label, "RELEARN", "hook-injected entry is RELEARN")
 local hookedBattle = Runtime.call("ui.party.submenu",
                                   function(_, items) return items end,
                                   game, battle, mon(50, {}),
@@ -211,7 +211,7 @@ do
   local g = screenGame()
   local entry = ex.injectSubmenu(Data, fieldItems(),
                                  mon(20, { { id = "FIX_TACKLE" } }),
-                                 { battle = false })[2]
+                                 { battle = false })[3]
   local target = mon(20, { { id = "FIX_TACKLE" } })
   entry.onSelect(target, g)
   T.eq(#g.stack.list, 1, "onSelect pushes one screen")

@@ -6,8 +6,8 @@ plus level-1 moves) once it has reached the required level.
 ## How to try it
 
 1. Open the party menu (START > POKéMON) outside of battle.
-2. Select a POKéMON, then pick **RELEARN** — it sits between STATS and
-   SWITCH.
+2. Select a POKéMON, then pick **RELEARN** — it sits at the bottom of the
+   list, after SWITCH (SWITCH keeps the second slot).
 3. Choose a move. A free moveset slot learns it right away; a full moveset
    asks which move to forget (HM moves can't be forgotten, same as the
    level-up flow).

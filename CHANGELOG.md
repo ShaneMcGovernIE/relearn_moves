@@ -1,9 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [1.3.0] - 2026-08-07
 
 ### Changed
 
+- RELEARN moves to the bottom of the field party-menu submenu, after
+  SWITCH. SWITCH keeps the second slot; RELEARN is appended regardless of
+  the engine's row ordering.
 - When a mon has nothing to relearn, the empty move list box is gone —
   only the "No moves to relearn." message shows in the dialogue box below.
 
