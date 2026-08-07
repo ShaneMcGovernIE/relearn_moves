@@ -105,16 +105,16 @@ local function fieldItems()
 end
 local game = { data = Data }
 
--- relearnable mon: RELEARN lands between STATS and SWITCH
+-- relearnable mon: RELEARN lands at the bottom, after SWITCH
 local items = ex.injectSubmenu(Data, fieldItems(),
                                mon(20, { { id = "FIX_TACKLE" } }),
                                { battle = false })
 T.eq(#items, 3, "RELEARN inserted")
 T.eq(items[1].label, "STATS", "STATS stays first")
-T.eq(items[2].label, "RELEARN", "RELEARN sits between STATS and SWITCH")
-T.eq(items[3].label, "SWITCH", "SWITCH stays last")
-T.eq(type(items[2].onSelect), "function", "entry carries an onSelect callback")
-T.eq(items[2].relearn, true, "entry carries the idempotency marker")
+T.eq(items[2].label, "SWITCH", "SWITCH keeps the second slot")
+T.eq(items[3].label, "RELEARN", "RELEARN sits at the bottom")
+T.eq(type(items[3].onSelect), "function", "entry carries an onSelect callback")
+T.eq(items[3].relearn, true, "entry carries the idempotency marker")
 local again = ex.injectSubmenu(Data, items, mon(20, { { id = "FIX_TACKLE" } }),
                                { battle = false })
 T.eq(again, items, "injecting twice is a no-op")
@@ -130,12 +130,12 @@ local noneItems = fieldItems()
 local none = ex.injectSubmenu(Data, noneItems, mon(5, { { id = "FIX_TACKLE" } }),
                               { battle = false })
 T.eq(#none, 3, "mon with nothing to relearn still gets RELEARN")
-T.eq(none[2].label, "RELEARN", "the empty-list entry is RELEARN")
+T.eq(none[3].label, "RELEARN", "the empty-list entry is RELEARN")
 local nilDataItems = fieldItems()
-T.eq(ex.injectSubmenu(nil, nilDataItems, mon(50, {}), { battle = false })[2].label,
+T.eq(ex.injectSubmenu(nil, nilDataItems, mon(50, {}), { battle = false })[3].label,
      "RELEARN", "missing data still injects the entry")
 local nilMonItems = fieldItems()
-T.eq(ex.injectSubmenu(Data, nilMonItems, nil, { battle = false })[2].label,
+T.eq(ex.injectSubmenu(Data, nilMonItems, nil, { battle = false })[3].label,
      "RELEARN", "missing mon still injects the entry")
 
 -- ------------------------------------------------------- hook wiring (real)
@@ -146,7 +146,7 @@ local hooked = Runtime.call("ui.party.submenu",
                             mon(20, { { id = "FIX_TACKLE" } }),
                             { battle = false })
 T.eq(#hooked, 3, "ui.party.submenu hook injects through the runtime")
-T.eq(hooked[2].label, "RELEARN", "hook-injected entry is RELEARN")
+T.eq(hooked[3].label, "RELEARN", "hook-injected entry is RELEARN")
 local hookedBattle = Runtime.call("ui.party.submenu",
                                   function(_, items) return items end,
                                   game, battle, mon(50, {}),
@@ -205,13 +205,60 @@ local Screens = require("src.ui.Screens")
 local mk = Screens.get(screenGame(), "MoveRelearn")
 T.neq(mk, nil, "screens registry resolves the MoveRelearn factory")
 
+-- ---------------------------------------------- qol_toggles HM-gate interop
+
+-- a fake loader shaped like the real one (Game.mods): mods / modOptions /
+-- exports keyed by mod id, with QoL Toggles' exported defaultFor
+local function qolLoader(forgettable, opts)
+  opts = opts or {}
+  local bucket = {}
+  if forgettable ~= nil then bucket.forgettable_hms = forgettable end
+  return {
+    mods = {
+      qol_toggles = {
+        enabled = opts.enabled ~= false,
+        failed = opts.failed == true,
+      },
+    },
+    modOptions = { qol_toggles = bucket },
+    exports = {
+      qol_toggles = {
+        defaultFor = function(key) return key == "forgettable_hms" end,
+      },
+    },
+  }
+end
+local function qolGame(forgettable, opts)
+  local g = screenGame()
+  g.mods = qolLoader(forgettable, opts)
+  return g
+end
+
+T.eq(ex.hmForgettable(screenGame()), false,
+     "no mods loader keeps the HM lock")
+T.eq(ex.hmForgettable({}), false, "missing game keeps the HM lock")
+T.eq(ex.hmForgettable(qolGame(nil)), true,
+     "toggle untouched (default ON) unlocks HMs with QoL Toggles present")
+T.eq(ex.hmForgettable(qolGame(true)), true, "FORGETTABLE HMs ON unlocks HMs")
+T.eq(ex.hmForgettable(qolGame(false)), false, "FORGETTABLE HMs OFF keeps the lock")
+do
+  local g = qolGame(nil)
+  g.mods.mods.qol_toggles.enabled = false
+  T.eq(ex.hmForgettable(g), false, "a disabled QoL Toggles keeps the lock")
+end
+do
+  local g = qolGame(nil)
+  g.mods.mods.qol_toggles.failed = true
+  T.eq(ex.hmForgettable(g), false, "a failed QoL Toggles keeps the lock")
+end
+
 -- the submenu entry's onSelect pushes the screen with the selected mon
 do
   stack.list = {}
   local g = screenGame()
   local entry = ex.injectSubmenu(Data, fieldItems(),
                                  mon(20, { { id = "FIX_TACKLE" } }),
-                                 { battle = false })[2]
+                                 { battle = false })[3]
   local target = mon(20, { { id = "FIX_TACKLE" } })
   entry.onSelect(target, g)
   T.eq(#g.stack.list, 1, "onSelect pushes one screen")
@@ -297,6 +344,23 @@ do
   T.neq(scr.forgetting, nil, "forget list stays open after an HM pick")
   T.eq(target.moves[1].id, "CUT", "the HM move was not replaced")
   T.eq(#g.stack.list, 1, "only the HM-can't-delete box is on the stack")
+end
+
+-- full moveset: QoL Toggles FORGETTABLE HMs ON lets an HM be replaced
+do
+  stack.list = {}
+  local g = qolGame(true)
+  local seq = pressed(nil, nil, nil, "a",   -- list: A
+                      nil, nil, nil, "a")   -- forget: A on CUT (HM)
+  g.input.wasPressed = seq
+  local target = mon(40, { { id = "CUT" }, { id = "FIX_EMBERISH" },
+                           { id = "FIX_THUNDER" }, { id = "FIX_WATER_GUN" } })
+  local scr = mk.new(g, target)
+  scr:update(0)
+  scr:update(0)
+  T.eq(scr.forgetting, nil, "forget list closes after the HM swap")
+  T.eq(target.moves[1].id, "FIX_TACKLE", "the HM slot now holds the relearned move")
+  T.eq(#g.stack.list, 1, "screen popped, message box pushed")
 end
 
 -- B pops straight back to the party menu

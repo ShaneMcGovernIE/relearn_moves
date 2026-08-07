@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.4.0] - 2026-08-07
+
+### Added
+
+- The forget list now honors the QoL Toggles mod's **FORGETTABLE HMs**
+  toggle (new optional dependency). When that toggle is ON, HM moves can be
+  forgotten from the relearn screen just like any other move; OFF (or the
+  mod absent) keeps them locked. The toggle is read the same way QoL
+  Toggles itself reads it, so a fresh install with the toggle untouched
+  (default ON) matches its level-up forget flow.
+
+## [1.3.0] - 2026-08-07
+
+### Changed
+
+- RELEARN moves to the bottom of the field party-menu submenu, after
+  SWITCH. SWITCH keeps the second slot; RELEARN is appended regardless of
+  the engine's row ordering.
+
 ## [1.2.0] - 2026-08-06
 
 ### Added

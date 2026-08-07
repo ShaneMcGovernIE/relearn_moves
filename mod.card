@@ -1,15 +1,15 @@
 -- Sharing metadata, read by tooling and the manager detail pane only.
 return {
-  summary = "Party menu gains RELEARN (between STATS and SWITCH, field only) to relearn any level-up move the mon has reached the level for.",
+  summary = "Party menu gains RELEARN (bottom of the submenu, after SWITCH, field only) to relearn any level-up move the mon has reached the level for.",
   author = "Shane McGovern",
   contact = "https://github.com/ShaneMcGovernIE",
   tags = { "gameplay", "quality-of-life", "party" },
   differences = {
     changed = {
-      "the field party-menu submenu gains a RELEARN option between STATS and SWITCH",
+      "the field party-menu submenu gains a RELEARN option at the bottom, after SWITCH",
       "RELEARN lists the mon's species movelist (level-1 moves plus learnset entries) at or below its current level, minus moves it already knows",
       "picking a move with a free slot learns it immediately at full base PP",
-      "a full moveset opens a forget list; HM moves can't be forgotten",
+      "a full moveset opens a forget list; HM moves can't be forgotten unless the QoL Toggles mod's FORGETTABLE HMs toggle is on",
     },
     added = {},
     known = {
