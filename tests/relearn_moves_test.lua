@@ -6,6 +6,13 @@ local Runtime = require("src.mods.Runtime")
 local Data = require("src.core.Data")
 Data:load()
 
+-- Keep the test runnable both from a normal engine checkout (`mods/...`) and
+-- directly from this mod directory when the checkout is elsewhere.
+local modPath = "mods/relearn_moves"
+local testPath = tostring((arg and arg[0]) or ""):gsub("\\", "/")
+local fromTest = testPath:match("^(.*)/tests/relearn_moves_test%.lua$")
+if fromTest and fromTest ~= "" then modPath = fromTest end
+
 -- The engine reads the forget gate from constants.hmMoves (the fixture
 -- only carries FIX_CUT); seed the real HM set the screen flow relies on.
 Data.constants.hmMoves = { "CUT" }
@@ -22,6 +29,9 @@ Data.moves.FIX_WATER_GUN = { id = "FIX_WATER_GUN", name = "WATER GUN",
   type = "WATER", power = 40, accuracy = 100, pp = 25, effect = "NO_ADDITIONAL_EFFECT" }
 Data.moves.FIX_GROWL = { id = "FIX_GROWL", name = "GROWL", type = "NORMAL",
   power = 0, accuracy = 100, pp = 40, effect = "ATTACK_DOWN1_EFFECT" }
+Data.moves.FIX_LONG = { id = "FIX_LONG", name = "DYNAMIC PUNCH",
+  type = "FIGHTING", power = 100, accuracy = 50, pp = 5,
+  effect = "NO_ADDITIONAL_EFFECT" }
 Data.moves.CUT = { id = "CUT", name = "CUT", type = "NORMAL",
   power = 50, accuracy = 95, pp = 30, effect = "NO_ADDITIONAL_EFFECT" }
 
@@ -43,7 +53,17 @@ Data.pokemon.FIXMON_REL = {
   evolutions = {},
 }
 
-local run = T.sdk.loadMod("mods/relearn_moves", { data = Data })
+-- Gold uses the same public hook and screen registry, but its species rows use
+-- `levelMoves` instead of Gen 1's `level1Moves` + `learnset` pair.  Loading the
+-- real mod through generation 2 exercises the loader gate as well as the
+-- shared runtime hook without needing a Gold ROM.
+Data.constants.generation = 2
+Data.pokemon.FIXMON_REL.levelMoves = Data.pokemon.FIXMON_REL.learnset
+Data.pokemon.FIXMON_REL.learnset = nil
+Data.pokemon.FIXMON_REL.level1Moves = nil
+
+local run = T.sdk.loadMod(modPath, { data = Data, generation = 2 })
+T.eq(run.mod and run.mod.state, "loaded", "runs on Gold")
 T.eq(#run.errors, 0, "loads clean (" .. tostring(run.errors[1]) .. ")")
 local ex = run.loader.exports.relearn_moves
 T.neq(ex, nil, "exports reachable")
@@ -85,6 +105,7 @@ T.eq(ex.applyMove(Data, m3, "FIX_WATER_GUN"), nil, "open slot learns, no drop")
 T.eq(#m3.moves, 4, "moveset filled")
 T.eq(m3.moves[4].id, "FIX_WATER_GUN", "new move appended")
 T.eq(m3.moves[4].pp, 25, "PP set from the move def")
+T.eq(m3.moves[4].maxPp, 25, "Gold max PP set from the move def")
 T.eq(ex.applyMove(Data, m3, "FIX_WATER_GUN"), nil, "already known is a no-op")
 T.eq(#m3.moves, 4, "no-op keeps the moveset")
 
@@ -94,6 +115,7 @@ local dropped = ex.applyMove(Data, m4, "FIX_GROWL", 3)
 T.eq(dropped, "FIX_THUNDER", "replacement reports the dropped move")
 T.eq(m4.moves[3].id, "FIX_GROWL", "slot 3 now holds the relearned move")
 T.eq(m4.moves[3].pp, 40, "relearned move gets full base PP")
+T.eq(m4.moves[3].maxPp, 40, "relearned Gold move gets full max PP")
 local untouched = ex.applyMove(Data, m4, "FIX_EMBERISH", nil)
 T.eq(untouched, nil, "full set without a slot is a no-op")
 T.eq(m4.moves[2].id, "FIX_EMBERISH", "nothing shifted without a slot")
@@ -177,6 +199,8 @@ T.eq(ex.tickerOffset(0, 40), ex.tickerOffset(T_CYCLE, 40),
 -- ------------------------------------------------------ data-driven HM gate
 
 T.eq(ex.isHM(Data, "CUT"), true, "constants.hmMoves gates CUT")
+T.eq(ex.isHM(Data, "WATERFALL"), true,
+     "Gold's extra HM moves stay protected")
 T.eq(ex.isHM(Data, "FIX_GROWL"), false, "non-HM moves stay forgettable")
 T.eq(ex.isHM(nil, "SURF"), true, "vanilla fallback when data is absent")
 T.eq(ex.isHM(nil, "TACKLE"), false, "fallback rejects non-HM ids")
@@ -202,8 +226,43 @@ end
 
 T.neq(Data.screens["MoveRelearn"], nil, "screen registered into data.screens")
 local Screens = require("src.ui.Screens")
+local Font = require("src.render.Font")
 local mk = Screens.get(screenGame(), "MoveRelearn")
 T.neq(mk, nil, "screens registry resolves the MoveRelearn factory")
+T.eq(ex.textLayout.dialogueWidth, 144,
+     "dialogue text uses the 18-tile interior width")
+T.eq(ex.textLayout.forgetNameWidth, 88,
+     "forget-list names stop before the PP column")
+T.check(Font.width("Which move should") <= ex.textLayout.dialogueWidth,
+        "forget prompt fits inside the dialogue box")
+
+-- Long move names in the forget list are clipped to the name zone and never
+-- draw under the PP column.  The relearn list already uses the same marquee;
+-- this catches regressions in the full-moveset branch specifically.
+do
+  local g = screenGame()
+  local target = mon(40, { { id = "FIX_LONG" }, { id = "FIX_EMBERISH" },
+                           { id = "FIX_THUNDER" }, { id = "FIX_WATER_GUN" } })
+  local scr = mk.new(g, target)
+  scr.forgetting = { move = "FIX_GROWL", index = 1 }
+  local oldScissor = love.graphics.setScissor
+  local rects = {}
+  love.graphics.setScissor = function(x, y, w, h)
+    rects[#rects + 1] = { x, y, w, h }
+  end
+  scr:draw()
+  love.graphics.setScissor = oldScissor
+  local clippedName, clippedPrompt = false, false
+  for _, r in ipairs(rects) do
+    if r[1] == 24 and r[3] == ex.textLayout.forgetNameWidth then
+      clippedName = true
+    elseif r[1] == 8 and r[3] == ex.textLayout.dialogueWidth then
+      clippedPrompt = true
+    end
+  end
+  T.eq(clippedName, true, "long forget-list name is clipped before PP")
+  T.eq(clippedPrompt, true, "forget prompt is bounded to the dialogue box")
+end
 
 -- ---------------------------------------------- qol_toggles HM-gate interop
 
@@ -291,6 +350,12 @@ do
   T.eq(target.moves[2].pp, 25, "PP set through the screen flow")
   T.eq(#g.stack.list, 1, "screen popped, message box pushed")
   T.eq(type(g.stack.list[1].pages), "table", "message is a TextBox")
+  for _, page in ipairs(g.stack.list[1].pages) do
+    for _, line in ipairs(page) do
+      T.check(Font.width(line) <= ex.textLayout.dialogueWidth,
+              "learned-message line fits the dialogue box")
+    end
+  end
 end
 
 -- full moveset: A opens the forget list, B cancels back to the list

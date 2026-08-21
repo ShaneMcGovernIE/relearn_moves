@@ -1,15 +1,15 @@
 -- Sharing metadata, read by tooling and the manager detail pane only.
 return {
-  summary = "Party menu gains RELEARN (bottom of the submenu, after SWITCH, field only) to relearn any level-up move the mon has reached the level for.",
+  summary = "Party menu gains RELEARN (bottom of the submenu, after SWITCH, field only) on Gen 1 and Gold.",
   author = "Shane McGovern",
   contact = "https://github.com/ShaneMcGovernIE",
   tags = { "gameplay", "quality-of-life", "party" },
   differences = {
     changed = {
       "the field party-menu submenu gains a RELEARN option at the bottom, after SWITCH",
-      "RELEARN lists the mon's species movelist (level-1 moves plus learnset entries) at or below its current level, minus moves it already knows",
+      "RELEARN lists the mon's species level-up movelist at or below its current level, minus moves it already knows",
       "picking a move with a free slot learns it immediately at full base PP",
-      "a full moveset opens a forget list; HM moves can't be forgotten unless the QoL Toggles mod's FORGETTABLE HMs toggle is on",
+      "a full moveset opens a forget list; HM moves can't be forgotten unless the QoL Toggles mod's FORGETTABLE HMs toggle is on (including Gold's WATERFALL and WHIRLPOOL)",
     },
     added = {},
     known = {
@@ -19,5 +19,5 @@ return {
     },
   },
   credits = {},
-  compat = { engine = ">=0.0.0-0 <2.0.0", modApi = 2 },
+  compat = { engine = ">=0.0.0-0 <2.0.0", modApi = 2, games = { "gen1", "gen2" } },
 }

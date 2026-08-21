@@ -1,9 +1,10 @@
 # Copilot instructions — relearn_moves
 
-Lua mod for the Pokémon Gen 1 Recompilation (gen1recomp), a LÖVE2D port of
-Pokémon Red/Blue/Yellow. It adds a **RELEARN** option to the field party-menu
-submenu so a mon can relearn any move from its species movelist it has reached
-the level for. See `README.md` for the feature, `CHANGELOG.md` for history.
+Lua mod for the Pokémon Gen 1/Gen 2 Recompilation (gen1recomp), a LÖVE2D port
+of Pokémon Red/Blue/Yellow and Gold. It adds a **RELEARN** option to the field
+party-menu submenu so a mon can relearn any move from its species movelist it
+has reached the level for. See `README.md` for the feature, `CHANGELOG.md` for
+history.
 
 ## Build, test, and lint
 
@@ -16,6 +17,9 @@ engine's `src/` tree and `tools/modkit.py`.
 # Run the headless test suite (the only test file — this IS the single test):
 # from the engine checkout, with POKEPORT_DATA_DIR set so no ROM is needed.
 POKEPORT_DATA_DIR=tests/fixture_data luajit mods/relearn_moves/tests/relearn_moves_test.lua
+# If this repository is not installed under engine/mods, pass its relative
+# path instead; the test derives the mod path from its own filename.
+POKEPORT_DATA_DIR=tests/fixture_data luajit ../../Downloads/relearn_moves-main/tests/relearn_moves_test.lua
 
 # Validate the mod through the real loader (ROM-free fixture base):
 python3 tools/modkit.py validate mods/relearn_moves --base fixture
@@ -32,11 +36,10 @@ python3 tools/modkit.py pack mods/relearn_moves
 Dev game loop (from README): `POKEPORT_DEV=1 love .`, edit + F5 hot-reload,
 backtick for the dev console.
 
-**Source-of-truth gotcha:** `~/dev/gen1recomp/mods/relearn_moves` is a
-*separate clone* of this repo (not a symlink). Tests/validate resolve
-`mods/relearn_moves` relative to the engine checkout's CWD, so edits made in
-this repo must be synced into that clone before the commands see them. Never
-edit the engine checkout's copy directly — this repo is canonical.
+**Source-of-truth gotcha:** tests and validation resolve `mods/relearn_moves`
+relative to the engine checkout's CWD. Keep this repository canonical; either
+sync it into that path or invoke the headless test with this repository's
+relative path as shown above.
 
 ## Architecture
 
@@ -45,27 +48,29 @@ edit the engine checkout's copy directly — this repo is canonical.
   to `mod.hooks:wrap`, `mod.content.<registry>` (registries freeze after
   load — no runtime patching), and `mod.exports` (observable by tests).
   Requires `"permissions": ["engine_internals"]` in `manifest.json` (already
-  set) because it requires engine modules like `src.render.Font`.
-- **Submenu injection:** the `ui.party.submenu` hook (engine
-  `src/ui/PartyMenu.lua:620`) receives the vanilla item list after it is
-  built. Hook-injected entries carry an `onSelect` callback instead of an
-  action id (`PartyMenu.lua:332-334`), so the vanilla update loop handles
-  them. RELEARN is inserted between STATS and SWITCH, guarded by
-  `ctx.battle` (battle submenu stays vanilla), and is always present out of
-  battle for discoverability.
+  set) for the shared string/sound helpers; drawing uses the public `mod.ui`
+  facade.
+- **Submenu injection:** the `ui.party.submenu` hook receives the vanilla item
+  list after it is built on both generations. Hook-injected entries carry an
+  `onSelect` callback instead of an action id, so the vanilla update loop
+  handles them. RELEARN is appended after SWITCH, guarded by `ctx.battle`
+  (battle submenu stays vanilla), and is always present out of battle for
+  discoverability.
 - **The learn flow** is a screen (`MoveRelearn`) registered via
   `mod.content.screens:register("MoveRelearn", { new = ... })`, pushed over
-  the still-open party menu with `Screens.push(game, "MoveRelearn", selMon)`.
-  It pops itself with `game.stack:pop()` and pushes a `TextBox` message.
+  the still-open party menu with `mod.ui.push(game, "MoveRelearn", selMon)`.
+  `mod.ui.TextBox`, `mod.ui.Font`, and `mod.ui.Theme` provide the shared UI
+  facade. It pops itself with `game.stack:pop()` and pushes a `TextBox` message.
 - **Pure logic layer** is exported via `mod.exports` so the headless suite can
-  exercise it without a live game: `buildRelearnable` (level-1 moves +
-  learnset entries at or below level, in movelist order, deduped, minus known
-  moves), `applyMove` (learn into an open slot or replace slot 1-4, full base
-  PP), `injectSubmenu`, `tickerOffset` (marquee pacing), `HM_MOVES`.
-- **Data model:** `game.data.pokemon[species]` carries `level1Moves` and
-  `learnset` (`{level, move}` entries, in order); moves live in
-  `game.data.moves[id]` with `name` and `pp`. A mon's moves are
-  `{id, pp}` slots.
+  exercise it without a live game: `buildRelearnable` (Gen 1's level-1 moves
+  plus `learnset`, or Gold's ordered `levelMoves`, at or below level, deduped,
+  minus known moves), `applyMove` (learn into an open slot or replace slot
+  1-4, full base PP), `injectSubmenu`, `tickerOffset` (marquee pacing), and
+  the generation-specific HM sets.
+- **Data model:** Gen 1 carries `level1Moves` plus `learnset`; Gold carries
+  ordered `levelMoves` rows (`{level, move}`), including level-1 moves. Moves
+  live in `game.data.moves[id]` with `name` and `pp`. A mon's moves are
+  `{id, pp}` slots; Gold also tracks `maxPp`, which relearned moves receive.
 
 ## Conventions
 
@@ -89,8 +94,9 @@ edit the engine checkout's copy directly — this repo is canonical.
   `love.graphics.setScissor`. Pacing is `TICKER_HOLD = 1.6`s and
   `TICKER_SPEED = 16`px/s, cycling hold → scroll out → hold → scroll back;
   `tickerOffset(t, overflow)` is the pure implementation.
-- **HM moves** (CUT, FLY, SURF, STRENGTH, FLASH) can't be forgotten — the
-  same gate the engine's level-up flow applies (IsMoveHM).
+- **HM moves** (CUT, FLY, SURF, STRENGTH, FLASH, plus Gold's WATERFALL and
+  WHIRLPOOL) can't be forgotten — the same gate the engine's level-up flow
+  applies (IsMoveHM).
 - **Localizable text:** use `Strings("...")` for player-facing strings, not
   raw literals.
 - **Testing style:** seed real move/species records into `Data.moves` /

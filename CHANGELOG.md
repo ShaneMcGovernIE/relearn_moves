@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.5.1] - 2026-08-21
+
+### Fixed
+
+- Long move names in the full-moveset forget list now marquee inside the
+  name column instead of running into the PP column.
+- Manual prompt labels are clipped to the dialogue-box interior, and headless
+  coverage checks the custom text bounds.
+
+## [1.5.0] - 2026-08-21
+
+### Added
+
+- Gold / Gen 2 compatibility through the shared party submenu hook and screen
+  registry.
+- Gold level-up movelists (`levelMoves`) and Gold's WATERFALL / WHIRLPOOL HM
+  protection.
+- Gold headless boot coverage in the mod test.
+
 ## [1.4.0] - 2026-08-07
 
 ### Added

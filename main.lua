@@ -3,20 +3,22 @@
 -- movelist it has reached the level for.  A full moveset opens a forget
 -- list (HM moves stay locked unless the QoL Toggles mod's FORGETTABLE HMs
 -- toggle is on); an empty slot learns the move straight away.  Battle
--- never sees the option.
+-- never sees the option.  The same hook and registered screen run on both
+-- Gen 1 and Gold; the data adapter below accepts both learnset shapes.
 --
--- Wiring: the ui.party.submenu hook (src/ui/PartyMenu.lua:620) receives
--- the vanilla item list after it is built; hook-injected entries carry an
--- onSelect callback instead of an action id (PartyMenu.lua:332-334), so
--- the vanilla update handles the rest.  The learn flow is a screen
--- registered in the screens registry, pushed over the still-open party
--- menu with Screens.push.
+-- Wiring: the ui.party.submenu hook receives the vanilla item list after it
+-- is built on both generations; hook-injected entries carry an onSelect
+-- callback instead of an action id, so the vanilla update handles the rest.
+-- The learn flow is a screen registered in the screens registry and pushed
+-- over the still-open party menu through the public mod.ui facade.
 
-local Font = require("src.render.Font")
 local Strings = require("src.core.Strings")
-local Screens = require("src.ui.Screens")
 local Sound = require("src.core.Sound")
-local Theme = require("src.ui.Theme")
+
+-- The public UI facade is bound when the entry function runs.  Keeping this
+-- out of file-scope engine requires lets Gold resolve its own screen stack and
+-- keeps the screen registration generation-neutral.
+local Ui
 
 -- Vanilla HM set (data/moves/hm_moves.asm, IsMoveHM); the runtime gate is
 -- data-driven off constants.hmMoves (Data.lua:31) and falls back here when
@@ -25,12 +27,24 @@ local HM_MOVES = {
   CUT = true, FLY = true, SURF = true, STRENGTH = true, FLASH = true,
 }
 
+-- Gold also treats WATERFALL and WHIRLPOOL as HM moves.  They are not present
+-- in Gen 1's constants.hmMoves default, so they need a generation-aware
+-- fallback even when a Gold dataset inherits that shared default table.
+local GEN2_HM_MOVES = {
+  CUT = true, FLY = true, SURF = true, STRENGTH = true, FLASH = true,
+  WATERFALL = true, WHIRLPOOL = true,
+}
+
 -- Pure (mod.exports.isHM for headless tests): the engine's forget gate
 -- (the same set MoveLearnMenu applies via IsMoveHM).  Reads the live
 -- constants.hmMoves list -- so a mod or imported dataset that extends the
 -- HM set gates here too -- and falls back to the vanilla five.
 local function isHM(data, moveId)
-  local hm = data and data.constants and data.constants.hmMoves
+  local constants = data and data.constants
+  if constants and constants.generation == 2 and GEN2_HM_MOVES[moveId] then
+    return true
+  end
+  local hm = constants and constants.hmMoves
   if hm then
     for _, id in ipairs(hm) do
       if id == moveId then return true end
@@ -66,7 +80,9 @@ end
 
 -- Pure (mod.exports.buildRelearnable for headless tests): the moves a mon
 -- may relearn -- level-1 moves plus learnset entries at or below its
--- level, in movelist order, deduped, minus what it already knows.
+-- level, in movelist order, deduped, minus what it already knows.  Gen 1
+-- calls the rows `learnset`; Gold calls them `levelMoves` and includes its
+-- level-1 moves in that ordered list.
 -- Returns { level, move, name }.
 local function buildRelearnable(data, def, mon)
   local out, seen, known = {}, {}, {}
@@ -83,8 +99,9 @@ local function buildRelearnable(data, def, mon)
     }
   end
   for _, id in ipairs(def.level1Moves or {}) do add(1, id) end
-  for _, entry in ipairs(def.learnset or {}) do
-    if entry.level <= mon.level then add(entry.level, entry.move) end
+  local rows = def.learnset or def.levelMoves or {}
+  for _, entry in ipairs(rows) do
+    if entry.level and entry.level <= mon.level then add(entry.level, entry.move) end
   end
   return out
 end
@@ -97,7 +114,10 @@ local function applyMove(data, mon, moveId, replace)
     if mv.id == moveId then return nil end
   end
   local mdef = data and data.moves and data.moves[moveId]
-  local slot = { id = moveId, pp = (mdef and mdef.pp) or 0 }
+  local pp = (mdef and mdef.pp) or 0
+  -- Gold tracks maxPp alongside pp.  The extra field is harmless on Gen 1
+  -- and keeps a relearned move compatible with both save models.
+  local slot = { id = moveId, pp = pp, maxPp = pp }
   mon.moves = mon.moves or {}
   if #mon.moves < 4 then
     mon.moves[#mon.moves + 1] = slot
@@ -123,7 +143,7 @@ local function injectSubmenu(data, items, mon, ctx)
     label = Strings("RELEARN"),
     relearn = true,
     onSelect = function(selMon, game)
-      Screens.push(game, "MoveRelearn", selMon)
+      Ui.push(game, "MoveRelearn", selMon)
     end,
   }
   -- RELEARN goes at the bottom of the list, after SWITCH (SWITCH keeps the
@@ -168,7 +188,7 @@ end
 function MoveRelearn:finish(message)
   -- pop the screen first, then the message reads over the party menu
   self.game.stack:pop()
-  local TextBox = require("src.render.TextBox")
+  local TextBox = Ui.TextBox
   self.game.stack:push(TextBox.new(self.game, message))
 end
 
@@ -227,7 +247,7 @@ function MoveRelearn:update(dt)
       local old = self.mon.moves[self.forgetting.index]
       if isHM(self.game.data, old.id) and not hmForgettable(self.game) then
         -- HMCantDeleteText, then back to the forget list
-        local TextBox = require("src.render.TextBox")
+        local TextBox = Ui.TextBox
         self.game.stack:push(TextBox.new(self.game,
           Strings("HM techniques\ncan't be deleted!")))
         return
@@ -298,6 +318,9 @@ local NAME_GAP = 8 -- gap between the level digits and the move name
 local PP_GAP = 8 -- gap between the name window and the right-aligned PP
 local PP_W = 32 -- "PP%2d" = 4 glyphs at 8px
 local PP_X = 152 - PP_W
+local FORGET_NAME_W = PP_X - CLIP_X - PP_GAP
+local DIALOGUE_X = 8
+local DIALOGUE_W = 144 -- 18 interior tiles in the 20-tile dialogue box
 
 -- Ticker hold/scroll pacing: hold at each end so the player can read the
 -- whole name, scroll at 16px/s (half a second per glyph).
@@ -322,6 +345,28 @@ function MoveRelearn.tickerOffset(t, overflow)
   return -overflow + p * TICKER_SPEED
 end
 
+-- Draw text inside a fixed pixel window.  The GB font is normally 8px wide,
+-- but translations and alternate font pages can have variable advances, so
+-- every bounded label is measured with Font.width rather than a byte count.
+local function drawClippedText(text, x, y, width, offset)
+  local Font = Ui.Font
+  if love and love.graphics and love.graphics.setScissor then
+    love.graphics.setScissor(x, y, width, 8)
+  end
+  Font.draw(text, x + (offset or 0), y)
+  if love and love.graphics and love.graphics.setScissor then
+    love.graphics.setScissor()
+  end
+end
+
+local function drawTickerText(text, x, y, width, tick)
+  local Font = Ui.Font
+  local overflow = Font.width(text) - width
+  local offset = overflow > 0
+    and MoveRelearn.tickerOffset(tick or 0, overflow) or 0
+  drawClippedText(text, x, y, width, offset)
+end
+
 -- Draw one row: the level prefix fixed at the left, the learned PP
 -- right-aligned, then the move name starting right after the level
 -- digits, tickering when the NAME alone overflows its window (which
@@ -329,45 +374,42 @@ end
 -- bounds the marquee so text never bleeds over the box border or under
 -- the PP; the clip is cleared per row.
 local function drawRowLabel(game, prefix, name, pp, row, tick)
+  local Font = Ui.Font
   local y = (5 + row) * 8
   Font.draw(prefix, CLIP_X, y)
   Font.draw(("PP%2d"):format(pp), PP_X, y)
   local x = CLIP_X + Font.width(prefix) + NAME_GAP
   local clipW = PP_X - x - PP_GAP
-  local w = Font.width(name)
-  if w <= clipW then
-    Font.draw(name, x, y)
-    return
-  end
-  if love and love.graphics and love.graphics.setScissor then
-    love.graphics.setScissor(x, y, clipW, 8)
-  end
-  Font.draw(name, x + MoveRelearn.tickerOffset(tick or 0, w - clipW), y)
-  if love and love.graphics and love.graphics.setScissor then
-    love.graphics.setScissor()
-  end
+  drawTickerText(name, x, y, clipW, tick)
 end
 
 function MoveRelearn:draw()
+  local Font = Ui.Font
+  local Theme = Ui.Theme
   if self.forgetting or #self.list > 0 then
     Font.drawBox(BOX_TX, BOX_TY, BOX_TW, BOX_TH)
   end
   love.graphics.setColor(0, 0, 0, 1)
   if self.forgetting then
     for i, mv in ipairs(self.mon.moves) do
-      Font.draw(self.game.data.moves[mv.id].name, CLIP_X, (5 + i) * 8)
+      local moveDef = self.game.data.moves[mv.id]
+      drawTickerText((moveDef and moveDef.name) or mv.id,
+                     CLIP_X, (5 + i) * 8, FORGET_NAME_W, self.tick)
       Font.draw(("PP%2d"):format(mv.pp or 0), PP_X, (5 + i) * 8)
     end
     Font.draw(Strings("CANCEL"), CLIP_X, (6 + #self.mon.moves) * 8)
     Font.drawCode(CURSOR, CLIP_X - 8, (5 + self.forgetting.index) * 8)
     Font.drawBox(0, 12, 20, 6)
-    Font.draw(Strings("Which move should"), 8, 14 * 8)
-    Font.draw(Strings("be forgotten?"), 8, 16 * 8)
+    drawClippedText(Strings("Which move should"), DIALOGUE_X, 14 * 8,
+                    DIALOGUE_W)
+    drawClippedText(Strings("be forgotten?"), DIALOGUE_X, 16 * 8,
+                    DIALOGUE_W)
   elseif #self.list == 0 then
     -- No move list box: just the message in the dialogue box below (any
     -- button exits, handled in update).
     Font.drawBox(0, 12, 20, 6)
-    Font.draw(Strings("No moves to\nrelearn."), 8, 14 * 8)
+    drawClippedText(Strings("No moves to"), DIALOGUE_X, 14 * 8, DIALOGUE_W)
+    drawClippedText(Strings("relearn."), DIALOGUE_X, 16 * 8, DIALOGUE_W)
   else
     local last = math.min(#self.list, self.scroll + ROWS)
     for i = self.scroll + 1, last do
@@ -383,25 +425,32 @@ function MoveRelearn:draw()
         (BOX_TX + BOX_TW - 2) * 8, (BOX_TY + BOX_TH - 1) * 8)
     end
     Font.drawBox(0, 12, 20, 6)
-    Font.draw(Strings("Relearn which"), 8, 14 * 8)
-    Font.draw(Strings("move?"), 8, 16 * 8)
+    drawClippedText(Strings("Relearn which"), DIALOGUE_X, 14 * 8,
+                    DIALOGUE_W)
+    drawClippedText(Strings("move?"), DIALOGUE_X, 16 * 8, DIALOGUE_W)
   end
   love.graphics.setColor(1, 1, 1, 1)
 end
 
 return function(mod)
+  Ui = mod.ui
   mod.exports.buildRelearnable = buildRelearnable
   mod.exports.applyMove = applyMove
   mod.exports.injectSubmenu = injectSubmenu
   mod.exports.tickerOffset = MoveRelearn.tickerOffset
+  mod.exports.textLayout = {
+    dialogueWidth = DIALOGUE_W,
+    forgetNameWidth = FORGET_NAME_W,
+  }
   mod.exports.HM_MOVES = HM_MOVES
+  mod.exports.GEN2_HM_MOVES = GEN2_HM_MOVES
   mod.exports.isHM = isHM
   mod.exports.hmForgettable = hmForgettable
 
   mod.content.screens:register("MoveRelearn", { new = MoveRelearn.new })
 
   mod.hooks:wrap("ui.party.submenu", function(next, game, items, mon, ctx)
-    items = next(game, items)
+    items = next(game, items, mon, ctx)
     return injectSubmenu(game and game.data, items, mon, ctx)
   end)
 end
