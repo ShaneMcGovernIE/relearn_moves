@@ -1,7 +1,7 @@
 # Relearn Moves
 
-Lets any POKéMON relearn moves from its species movelist (level-up learnset
-plus level-1 moves) once it has reached the required level.
+Lets any POKéMON relearn moves from its species movelist once it has reached
+the required level. Works on Red/Blue/Yellow and Gold.
 
 ## How to try it
 
@@ -19,11 +19,12 @@ its current level reads "No moves to relearn." instead of hiding the row.
 If the QoL Toggles mod (`qol_toggles`) is installed, its **FORGETTABLE HMs**
 toggle is honored by the forget list: OFF keeps HM moves locked (the
 default when QoL Toggles isn't installed), ON lets them be replaced like
-any other move.
+any other move. Gold also protects WATERFALL and WHIRLPOOL.
 
 ## Development
 
 1. `POKEPORT_DEV=1 love .` once, leave it running
 2. edit, press F5 to hot-reload, backtick for the dev console
 3. `python3 tools/modkit.py validate relearn_moves` before sharing
-4. `python3 tools/modkit.py pack mods/relearn_moves` to ship
+4. `python3 tools/modkit.py gen2check mods/relearn_moves`
+5. `python3 tools/modkit.py pack mods/relearn_moves` to ship
