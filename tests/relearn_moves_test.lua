@@ -238,7 +238,9 @@ T.check(Font.width("Which move should") <= ex.textLayout.dialogueWidth,
 
 -- Long move names in the forget list are clipped to the name zone and never
 -- draw under the PP column.  The relearn list already uses the same marquee;
--- this catches regressions in the full-moveset branch specifically.
+-- this catches regressions in the full-moveset branch specifically.  The
+-- clipping is glyph-level rather than love.graphics scissor state so Gold's
+-- transformed framebuffer cannot hide the text.
 do
   local g = screenGame()
   local target = mon(40, { { id = "FIX_LONG" }, { id = "FIX_EMBERISH" },
@@ -246,54 +248,40 @@ do
   local scr = mk.new(g, target)
   scr.forgetting = { move = "FIX_GROWL", index = 1 }
   local oldScissor = love.graphics.setScissor
-  local rects = {}
-  love.graphics.setScissor = function(x, y, w, h)
-    rects[#rects + 1] = { x, y, w, h }
+  local oldDrawCode = Font.drawCode
+  local scissorCalls, scissorActive = 0, false
+  local draws = {}
+  love.graphics.setScissor = function(x)
+    scissorCalls = scissorCalls + 1
+    scissorActive = x ~= nil
+  end
+  Font.drawCode = function(code, x, y)
+    if y == 48 or y == 112 or y == 128 then
+      draws[#draws + 1] = { x = x, y = y, scissored = scissorActive }
+    end
+    return oldDrawCode(code, x, y)
   end
   scr:draw()
+  Font.drawCode = oldDrawCode
   love.graphics.setScissor = oldScissor
-  local clippedName, clippedPrompt = false, false
-  for _, r in ipairs(rects) do
-    if r[1] == 24 and r[3] == ex.textLayout.forgetNameWidth then
-      clippedName = true
-    elseif r[1] == 8 and r[3] == ex.textLayout.dialogueWidth then
-      clippedPrompt = true
+  local nameDrawn, promptDrawn, nameOverflow, scissoredText = false, false,
+    false, false
+  for _, draw in ipairs(draws) do
+    if draw.scissored then scissoredText = true end
+    if draw.y == 48 and draw.x >= 24 and draw.x < 112 then
+      nameDrawn = true
+      if draw.x + 8 > 24 + ex.textLayout.forgetNameWidth then
+        nameOverflow = true
+      end
+    elseif (draw.y == 112 or draw.y == 128) and draw.x >= 8 then
+      promptDrawn = true
     end
   end
-  T.eq(clippedName, true, "long forget-list name is clipped before PP")
-  T.eq(clippedPrompt, true, "forget prompt is bounded to the dialogue box")
-
-  -- Gold draws the ordinary screen stack under a translated/scaled transform.
-  -- setScissor uses window coordinates, so the logical clip must follow that
-  -- transform or the name is clipped away while LV/PP (which are unscissored)
-  -- remain visible.
-  local oldTransform = love.graphics.getTransform
-  local transformedRects = {}
-  love.graphics.getTransform = function()
-    return {
-      transformPoint = function(_, x, y)
-        return x * 3 + 10, y * 3 + 20
-      end,
-    }
-  end
-  love.graphics.setScissor = function(x, y, w, h)
-    transformedRects[#transformedRects + 1] = { x, y, w, h }
-  end
-  scr:draw()
-  love.graphics.getTransform = oldTransform
-  love.graphics.setScissor = oldScissor
-  local transformedName, transformedPrompt = false, false
-  for _, r in ipairs(transformedRects) do
-    if r[1] == 82 and r[2] == 164 and r[3] == 264 and r[4] == 24 then
-      transformedName = true
-    elseif r[1] == 34 and r[2] == 356 and r[3] == 432 and r[4] == 24 then
-      transformedPrompt = true
-    end
-  end
-  T.eq(transformedName, true,
-       "Gold name clip follows the active screen transform")
-  T.eq(transformedPrompt, true,
-       "Gold dialogue clip follows the active screen transform")
+  T.eq(scissorCalls, 0, "Gold text clipping does not touch GPU scissors")
+  T.eq(nameDrawn, true, "long forget-list name still renders")
+  T.eq(promptDrawn, true, "forget prompt still renders")
+  T.eq(nameOverflow, false, "long forget-list name stays before PP")
+  T.eq(scissoredText, false, "Gold text is not hidden by a stale scissor")
 end
 
 -- ---------------------------------------------- qol_toggles HM-gate interop

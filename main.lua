@@ -345,40 +345,35 @@ function MoveRelearn.tickerOffset(t, overflow)
   return -overflow + p * TICKER_SPEED
 end
 
--- LÖVE's scissor rectangle is expressed in window coordinates, while Gold
--- draws an ordinary screen stack under Game2's translated/scaled 160x144
--- transform.  Convert the logical tile-space rectangle before clipping or
--- the name is clipped away at the window's top-left and only unscissored
--- fields such as LV/PP remain visible.  The identity fallback keeps this
--- compatible with the canvas-backed Gen 1 path and older headless stubs.
-local function scissorRect(x, y, width, height)
-  local graphics = love and love.graphics
-  local getTransform = graphics and graphics.getTransform
-  if type(getTransform) == "function" then
-    local transform = getTransform()
-    local transformPoint = transform and transform.transformPoint
-    if type(transformPoint) == "function" then
-      local x1, y1 = transform:transformPoint(x, y)
-      local x2, y2 = transform:transformPoint(x + width, y + height)
-      local left, top = math.floor(x1), math.floor(y1)
-      return left, top, math.ceil(x2) - left, math.ceil(y2) - top
-    end
-  end
-  return x, y, width, height
-end
-
--- Draw text inside a fixed pixel window.  The GB font is normally 8px wide,
--- but translations and alternate font pages can have variable advances, so
--- every bounded label is measured with Font.width rather than a byte count.
+-- Draw text inside a fixed pixel window without relying on love.graphics'
+-- scissor state.  Gold can render the screen stack through a transformed
+-- framebuffer, and a GPU scissor then has a different coordinate space from
+-- the logical 160x144 screen.  Walking encoded glyphs keeps the clip in the
+-- same coordinate system as Font.draw and works for both tile and TTF pages.
+-- A glyph is drawn only when it fits wholly inside the window, so a marquee
+-- can never bleed into the PP column or the box border.
 local function drawClippedText(text, x, y, width, offset)
   local Font = Ui.Font
-  if love and love.graphics and love.graphics.setScissor then
-    local sx, sy, sw, sh = scissorRect(x, y, width, 8)
-    love.graphics.setScissor(sx, sy, sw, sh)
+  local pen = x + (offset or 0)
+  local right = x + width
+  local encode = Font.encode
+  local advanceOf = Font.advanceOf
+  local drawCode = Font.drawCode
+  if type(encode) ~= "function" or type(advanceOf) ~= "function"
+     or type(drawCode) ~= "function" then
+    -- Older engine stubs do not expose the glyph pipeline.  Their labels are
+    -- fixed-width and fit by construction, so preserve the old draw path.
+    Font.draw(text, pen, y)
+    return
   end
-  Font.draw(text, x + (offset or 0), y)
-  if love and love.graphics and love.graphics.setScissor then
-    love.graphics.setScissor()
+
+  for _, code in ipairs(encode(text)) do
+    local advance = advanceOf(code)
+    if pen >= x and pen + advance <= right then
+      drawCode(code, pen, y)
+    end
+    pen = pen + advance
+    if pen >= right then break end
   end
 end
 
@@ -393,9 +388,8 @@ end
 -- Draw one row: the level prefix fixed at the left, the learned PP
 -- right-aligned, then the move name starting right after the level
 -- digits, tickering when the NAME alone overflows its window (which
--- stops a fixed gap before the PP column).  The love.graphics.setScissor
--- bounds the marquee so text never bleeds over the box border or under
--- the PP; the clip is cleared per row.
+-- stops a fixed gap before the PP column).  drawClippedText bounds the
+-- marquee so text never bleeds over the box border or under the PP.
 local function drawRowLabel(game, prefix, name, pp, row, tick)
   local Font = Ui.Font
   local y = (5 + row) * 8
