@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.3] - 2026-08-22
+
+### Fixed
+
+- Gold move names and relearn prompts no longer depend on the renderer's
+  transformed scissor coordinates. Text is clipped glyph-by-glyph inside its
+  logical list or dialogue box, so the labels remain visible on Gold.
+
 ## [1.5.2] - 2026-08-22
 
 ### Fixed
