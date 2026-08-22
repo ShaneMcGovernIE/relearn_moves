@@ -262,6 +262,38 @@ do
   end
   T.eq(clippedName, true, "long forget-list name is clipped before PP")
   T.eq(clippedPrompt, true, "forget prompt is bounded to the dialogue box")
+
+  -- Gold draws the ordinary screen stack under a translated/scaled transform.
+  -- setScissor uses window coordinates, so the logical clip must follow that
+  -- transform or the name is clipped away while LV/PP (which are unscissored)
+  -- remain visible.
+  local oldTransform = love.graphics.getTransform
+  local transformedRects = {}
+  love.graphics.getTransform = function()
+    return {
+      transformPoint = function(_, x, y)
+        return x * 3 + 10, y * 3 + 20
+      end,
+    }
+  end
+  love.graphics.setScissor = function(x, y, w, h)
+    transformedRects[#transformedRects + 1] = { x, y, w, h }
+  end
+  scr:draw()
+  love.graphics.getTransform = oldTransform
+  love.graphics.setScissor = oldScissor
+  local transformedName, transformedPrompt = false, false
+  for _, r in ipairs(transformedRects) do
+    if r[1] == 82 and r[2] == 164 and r[3] == 264 and r[4] == 24 then
+      transformedName = true
+    elseif r[1] == 34 and r[2] == 356 and r[3] == 432 and r[4] == 24 then
+      transformedPrompt = true
+    end
+  end
+  T.eq(transformedName, true,
+       "Gold name clip follows the active screen transform")
+  T.eq(transformedPrompt, true,
+       "Gold dialogue clip follows the active screen transform")
 end
 
 -- ---------------------------------------------- qol_toggles HM-gate interop

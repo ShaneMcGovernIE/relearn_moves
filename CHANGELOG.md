@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.2] - 2026-08-22
+
+### Fixed
+
+- Gold move names now render inside the relearn and forget lists. Their clip
+  rectangles follow Gold's translated/scaled screen transform instead of
+  clipping the names off-screen.
+
 ## [1.5.1] - 2026-08-21
 
 ### Fixed
