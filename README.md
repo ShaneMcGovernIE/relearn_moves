@@ -9,17 +9,13 @@ the required level. Works on Red/Blue/Yellow and Gold.
 2. Select a POKéMON, then pick **RELEARN** — it sits at the bottom of the
    list, after SWITCH (SWITCH keeps the second slot).
 3. Choose a move. A free moveset slot learns it right away; a full moveset
-   asks which move to forget (HM moves can't be forgotten, same as the
-   level-up flow — unless the QoL Toggles mod's **FORGETTABLE HMs** toggle
-   is on, which unlocks them here too).
+   asks which move to forget. HM moves can be replaced from this flow too.
 
 The option never appears in battle. A mon with nothing left to relearn at
 its current level reads "No moves to relearn." instead of hiding the row.
 
-If the QoL Toggles mod (`qol_toggles`) is installed, its **FORGETTABLE HMs**
-toggle is honored by the forget list: OFF keeps HM moves locked (the
-default when QoL Toggles isn't installed), ON lets them be replaced like
-any other move. Gold also protects WATERFALL and WHIRLPOOL.
+Gold also recognizes WATERFALL and WHIRLPOOL as HM moves for its other move
+learning flows.
 
 ## Development
 

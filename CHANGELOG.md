@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.4] - 2026-09-04
+
+### Fixed
+
+- HM moves can now be replaced from the RELEARN flow without depending on
+  the optional QoL Toggles mod or its **FORGETTABLE HMs** setting.
+
 ## [1.5.3] - 2026-08-22
 
 ### Fixed

@@ -1,8 +1,7 @@
 -- Move Relearn: adds a RELEARN entry to the bottom of the field party-menu
 -- submenu (after SWITCH) that lets a mon relearn any move from its species
 -- movelist it has reached the level for.  A full moveset opens a forget
--- list (HM moves stay locked unless the QoL Toggles mod's FORGETTABLE HMs
--- toggle is on); an empty slot learns the move straight away.  Battle
+-- list, including HM moves; an empty slot learns the move straight away.  Battle
 -- never sees the option.  The same hook and registered screen run on both
 -- Gen 1 and Gold; the data adapter below accepts both learnset shapes.
 --
@@ -54,28 +53,11 @@ local function isHM(data, moveId)
   return HM_MOVES[moveId] == true
 end
 
--- Pure (mod.exports.hmForgettable for headless tests): whether an HM move
--- may be forgotten from the relearn forget list.  The vanilla lock stays
--- unless the QoL Toggles mod (optional dependency) is loaded, enabled and
--- not failed, and its FORGETTABLE HMs toggle reads ON.  The toggle lives
--- in the same options.lua bucket QoL Toggles writes (Game.mods.modOptions
--- .qol_toggles); when the user has never flipped it the bucket has no
--- entry, so we fall back to QoL Toggles' exported default for the toggle
--- (default ON) -- the exact fallback its own get() applies, keeping the
--- two forget flows consistent.  A fresh install with the toggle untouched
--- therefore unlocks HMs here too.
-local function hmForgettable(game)
-  local loader = game and game.mods
-  local other = loader and loader.mods and loader.mods.qol_toggles
-  if not other or not other.enabled or other.failed then return false end
-  local bucket = loader.modOptions and loader.modOptions.qol_toggles
-  local stored = bucket and bucket.forgettable_hms
-  if stored ~= nil then return stored == true end
-  local exports = loader.exports and loader.exports.qol_toggles
-  if exports and exports.defaultFor then
-    return exports.defaultFor("forgettable_hms") == true
-  end
-  return false
+-- Pure (mod.exports.hmForgettable for headless tests): HM moves are
+-- intentionally replaceable in this mod's relearn flow.  QoL Toggles may
+-- still control the separate level-up flow, but it is not required here.
+local function hmForgettable(_)
+  return true
 end
 
 -- Pure (mod.exports.buildRelearnable for headless tests): the moves a mon
