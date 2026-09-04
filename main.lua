@@ -1,9 +1,10 @@
 -- Move Relearn: adds a RELEARN entry to the bottom of the field party-menu
 -- submenu (after SWITCH) that lets a mon relearn any move from its species
--- movelist it has reached the level for.  A full moveset opens a forget
--- list, including HM moves; an empty slot learns the move straight away.  Battle
--- never sees the option.  The same hook and registered screen run on both
--- Gen 1 and Gold; the data adapter below accepts both learnset shapes.
+-- movelist it has reached the level for.  A full moveset can replace any
+-- existing move, including HMs, in both this flow and the vanilla
+-- level-up/TM move-learning flow.  Battle never sees the RELEARN option.
+-- The same hook and registered screen run on both Gen 1 and Gold; the data
+-- adapter below accepts both learnset shapes.
 --
 -- Wiring: the ui.party.submenu hook receives the vanilla item list after it
 -- is built on both generations; hook-injected entries carry an onSelect
@@ -13,6 +14,7 @@
 
 local Strings = require("src.core.Strings")
 local Sound = require("src.core.Sound")
+local VanillaMoveLearnMenu = require("src.ui.MoveLearnMenu")
 
 -- The public UI facade is bound when the entry function runs.  Keeping this
 -- out of file-scope engine requires lets Gold resolve its own screen stack and
@@ -109,6 +111,35 @@ local function applyMove(data, mon, moveId, replace)
   local old = mon.moves[replace]
   mon.moves[replace] = slot
   return old and old.id
+end
+
+-- The engine's normal level-up/TM screen has the same four-slot replacement
+-- UI, but its vanilla update rejects HMs before replacing the selected slot.
+-- Keep its enter/draw/finish behavior and replace only that input method so
+-- RELEARN and ordinary move learning share the same HM policy.
+local function unlockedMoveLearn(game, mon, newMoveId, onDone, learnedSound)
+  local screen = VanillaMoveLearnMenu.new(game, mon, newMoveId, onDone,
+                                          learnedSound)
+  function screen:update(_dt)
+    if not self.selecting then return end
+    local input = self.game.input
+    local n = #self.mon.moves
+    if input:wasPressed("up") then
+      self.index = self.index > 1 and self.index - 1 or n
+    elseif input:wasPressed("down") then
+      self.index = self.index < n and self.index + 1 or 1
+    elseif input:wasPressed("b") then
+      self:confirmAbandon()
+    elseif input:wasPressed("a") then
+      local old = self.mon.moves[self.index]
+      if not old then return end
+      local mdef = self.game.data.moves[self.newMoveId]
+      self.mon.moves[self.index] = { id = self.newMoveId, pp = mdef.pp }
+      self.forgot = self.game.data.moves[old.id].name
+      self:finish(true)
+    end
+  end
+  return screen
 end
 
 -- Pure (mod.exports.injectSubmenu for headless tests): append the RELEARN
@@ -447,6 +478,9 @@ return function(mod)
   mod.exports.hmForgettable = hmForgettable
 
   mod.content.screens:register("MoveRelearn", { new = MoveRelearn.new })
+  mod.content.screens:override("MoveLearnMenu", {
+    new = unlockedMoveLearn,
+  })
 
   mod.hooks:wrap("ui.party.submenu", function(next, game, items, mon, ctx)
     items = next(game, items, mon, ctx)

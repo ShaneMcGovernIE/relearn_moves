@@ -11,6 +11,9 @@ the required level. Works on Red/Blue/Yellow and Gold.
 3. Choose a move. A free moveset slot learns it right away; a full moveset
    asks which move to forget. HM moves can be replaced from this flow too.
 
+The normal level-up/TM move-learning screen also allows an HM to be replaced
+when the moveset is full.
+
 The option never appears in battle. A mon with nothing left to relearn at
 its current level reads "No moves to relearn." instead of hiding the row.
 

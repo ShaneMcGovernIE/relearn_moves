@@ -229,12 +229,30 @@ local Screens = require("src.ui.Screens")
 local Font = require("src.render.Font")
 local mk = Screens.get(screenGame(), "MoveRelearn")
 T.neq(mk, nil, "screens registry resolves the MoveRelearn factory")
+local vanillaLearn = Screens.get(screenGame(), "MoveLearnMenu")
+T.neq(vanillaLearn, nil, "screens registry resolves the vanilla learn factory")
 T.eq(ex.textLayout.dialogueWidth, 144,
      "dialogue text uses the 18-tile interior width")
 T.eq(ex.textLayout.forgetNameWidth, 88,
      "forget-list names stop before the PP column")
 T.check(Font.width("Which move should") <= ex.textLayout.dialogueWidth,
         "forget prompt fits inside the dialogue box")
+
+-- The screenshot bug is the normal full-moveset learn flow (level-up/TM), not
+-- only the RELEARN screen.  The mod must let that shared screen replace an HM
+-- too, otherwise the vanilla HMCantDeleteText still appears.
+do
+  local g = screenGame()
+  local target = mon(40, { { id = "CUT" }, { id = "FIX_EMBERISH" },
+                           { id = "FIX_THUNDER" }, { id = "FIX_WATER_GUN" } })
+  local scr = vanillaLearn.new(g, target, "FIX_TACKLE")
+  scr.selecting = true
+  g.input.wasPressed = function(_, key) return key == "a" end
+  scr:update(0)
+  T.eq(target.moves[1].id, "FIX_TACKLE",
+       "normal move-learning flow can replace an HM")
+  T.eq(#g.stack.list, 1, "normal HM replacement shows the learned message")
+end
 
 -- Long move names in the forget list are clipped to the name zone and never
 -- draw under the PP column.  The relearn list already uses the same marquee;

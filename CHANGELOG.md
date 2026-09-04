@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.5] - 2026-09-04
+
+### Fixed
+
+- HM moves can now be replaced from the normal full-moveset level-up/TM
+  learning screen, not only from RELEARN.
+
 ## [1.5.4] - 2026-09-04
 
 ### Fixed
